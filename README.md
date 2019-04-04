@@ -2,7 +2,7 @@
 
 This library currently provides three main functions:
 
-1.) **upfirdn**  (similar to ``scipy.signal.upfirdn``, but currently requires either ``up=1`` or ``down=1``)
+1.) **upfirdn**  (like ``scipy.signal.upfirdn``)
 
 2.) **convolve1d**  (similar to ``scipy.ndimage.convolve1d``)
 
@@ -13,13 +13,13 @@ convolve_separable can be used to implement the equivalent of:
 ``scipy.ndimage.gaussian_filter``
 
 Requires:
-    
+
 - NumPy
 - CuPy  (>=6.0.0a1 or so)
 - SciPy (>=0.19)
 
 Optional:
-    
+
 - pytest
 
 **Example**
