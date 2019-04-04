@@ -1,17 +1,13 @@
-# TODO: finalize behavior of offset, crop, etc.
-#       currently passing tests as-is, but the implementation could be cleaner
-
-import warnings
 from math import ceil
 
 import numpy as np
+
 import cupy
 from cupy.util import memoize
 
 
 try:
     # Device Attributes require CuPy > 6.0.b3
-    import cupy
     d = cupy.cuda.device.Device(0)
     cuda_MaxBlockDimX = d.attributes['MaxBlockDimX']
     cuda_MaxGridDimX = d.attributes['MaxGridDimX']
@@ -21,17 +17,17 @@ except AttributeError:
     cuda_MaxGridDimX = 2147483647
 
 
-try:
-    from scipy.signal._upfirdn import _output_len
-except ImportError:
-    def _output_len(len_h, in_len, up, down):
-        """The output length that results from a given input"""
-        in_len_copy = in_len + (len_h + (-len_h % up)) // up - 1
-        nt = in_len_copy * up
-        need = nt // down
-        if nt % down > 0:
-            need += 1
-        return need
+def _output_len(len_h, in_len, up, down):
+    """The output length that results from a given input.
+
+    scipy.signal._upfirdn._output_len
+    """
+    in_len_copy = in_len + (len_h + (-len_h % up)) // up - 1
+    nt = in_len_copy * up
+    need = nt // down
+    if nt % down > 0:
+        need += 1
+    return need
 
 
 include = r"""
@@ -283,133 +279,21 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
 """
 
 
-# TESTED vs. CPU
-_apply_batch_up1_template = include + r"""
-
-extern "C"
-{
-
-__global__
-void _apply_batch_up1(DTYPE_DATA *x, long long len_x,
-                      DTYPE_FILTER *h_trans_flip,
-                      long long len_h,
-                      DTYPE_OUT *out,
-                      long long down,
-                      long long out_axis_size,
-                      long long nbatch,
-                      long long _mode,
-                      DTYPE_DATA cval,
-                      long long offset,
-                      long long crop)
-{
-    __shared__ DTYPE_FILTER h_trans_flip_s[128];
-    long long i;
-    long long unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
-    long long batch_idx = unraveled_idx / out_axis_size;
-    MODE mode = (MODE)_mode;
-    DTYPE_OUT val = 0.0;
-
-    for (i=0; i<len_h; i++)
-    {
-        h_trans_flip_s[i] = h_trans_flip[i];
-    }
-
-    if (batch_idx < nbatch)
-    {
-        long long padded_len;
-        long long h_idx = 0;
-        long long x_conv_idx = 0;
-        long long offset_x = batch_idx * len_x;
-        long long offset_out = batch_idx * out_axis_size;
-        long long y_idx = unraveled_idx - offset_out;
-        long long x_idx = down * y_idx;
-        DTYPE_OUT xval;
-
-        bool zpad = (mode == MODE_ZEROPAD);
-        if (crop)
-            padded_len = len_x;
-        else
-            padded_len = len_x + len_h - 1;
-
-        if (x_idx < offset)
-            return;
-
-        if (x_idx < len_x)
-        {
-            h_idx = 0;
-            x_conv_idx = x_idx - len_h + 1;
-            if (x_conv_idx < 0){
-                if (zpad)
-                {
-                    h_idx -= x_conv_idx;
-                }
-                else
-                {
-                    for (; x_conv_idx < 0; x_conv_idx++){
-                        xval = _extend_left(&x[offset_x], x_conv_idx, len_x, mode, cval);
-                        val += xval * h_trans_flip_s[h_idx];
-                        h_idx++;
-                    }
-                }
-                x_conv_idx = 0;
-            }
-            for (; x_conv_idx < x_idx + 1; x_conv_idx++){
-                val += x[offset_x + x_conv_idx] * h_trans_flip_s[h_idx];
-                h_idx++;
-            }
-            atomicAdd(&out[unraveled_idx], val);
-        }
-
-        // Use a second simplified loop to flush out the last bits
-        else if (x_idx < padded_len)
-        {
-            h_idx = 0;
-            x_conv_idx = x_idx - len_h + 1;
-            for (; x_conv_idx < x_idx + 1; x_conv_idx++)
-            {
-                if (x_conv_idx >= len_x)
-                {
-                    xval = _extend_right(
-                        &x[offset_x], x_conv_idx, len_x, mode, cval);
-
-                }
-                else if (x_conv_idx < 0)
-                {
-                    xval = _extend_left(
-                        &x[offset_x], x_conv_idx, len_x, mode, cval);
-                }
-                else
-                {
-                    xval = x[offset_x + x_conv_idx];
-                }
-                val += xval * h_trans_flip_s[h_idx];
-                h_idx++;
-            }
-            atomicAdd(&out[unraveled_idx], val);
-        }
-    }
-}
-}
-"""
-
-
-# TESTED vs. CPU
-_apply_batch_down1_template = include + """
+_apply_batch_template = include + """
 
 extern "C" {
 
 __global__
-void _apply_batch_down1(DTYPE_DATA *x, long long len_x,
-                        DTYPE_FILTER *h_trans_flip,
-                        long long len_h,
-                        DTYPE_OUT *out,
-                        long long up,
-                        long long out_axis_size,
-                        long long nbatch,
-                        long long _mode,
-                        DTYPE_DATA cval,
-                        long long offset,
-                        long long crop)
+void _apply_batch(DTYPE_DATA *x, long long len_x,
+                  DTYPE_FILTER *h_trans_flip,
+                  long long len_h,
+                  DTYPE_OUT *out,
+                  long long up,
+                  long long down,
+                  long long out_axis_size,
+                  long long nbatch,
+                  long long _mode,
+                  DTYPE_DATA cval)
 {
     __shared__ DTYPE_FILTER h_trans_flip_s[128];
     long long x_conv_idx;
@@ -430,21 +314,17 @@ void _apply_batch_down1(DTYPE_DATA *x, long long len_x,
         long long padded_len;
         long long offset_x = batch_idx * len_x;
         long long offset_out = batch_idx * out_axis_size;
+
         long long y_idx = unraveled_idx - offset_out;
-        long long x_idx = (y_idx + offset) / up;
-        long long t = (y_idx + offset) % up;
+        long long t = (y_idx * down) % up;
         long long h_idx = t * h_per_phase;
+        long long x_idx = (y_idx*down) / up;
+
         DTYPE_OUT val = 0.0;
         DTYPE_OUT xval;
 
         bool zpad = ((mode == MODE_ZEROPAD));
-        if (crop)
-            padded_len = len_x;
-        else
-            padded_len = len_x + len_h - 1;
-
-        //if (x_idx < (offset / up))
-        //    return;
+        padded_len = len_x + len_h - 1;
 
         if (x_idx < len_x)
         {
@@ -504,6 +384,7 @@ void _apply_batch_down1(DTYPE_DATA *x, long long len_x,
 """
 
 
+# dictionary: CUDA C data types corresponding to numpy dtype.char values
 c_dtypes = {'f': 'float',
             'd': 'double',
             'F': 'complex<float>',
@@ -511,24 +392,16 @@ c_dtypes = {'f': 'float',
 
 
 def _fixup_dtype(dtype):
-    dtype_char = dtype.char
-    if dtype_char in ['f', 'd', 'F', 'D']:
-        return dtype, c_dtypes.get(dtype_char)
+    if dtype.char in ['f', 'd', 'F', 'D']:
+        return dtype, c_dtypes.get(dtype.char)
 
+    # determine nearest single or double precision floating point type
     dtype = np.result_type(dtype, np.float32)
-    dtype_char = dtype.char
-    if dtype_char == 'g':
-        msg = "float128 not supported. using float64 instead"
-        warnings.warn(msg)
+    if dtype.char == 'g':
         dtype = np.float64
-    elif dtype_char == 'G':
-        msg = "complex256 not supported. using complex128 instead"
-        warnings.warn(msg)
+    elif dtype.char == 'G':
         dtype = np.complex128
-    c_dtype = c_dtypes.get(dtype_char, None)
-    if c_dtype is None:
-        raise ValueError("unsupported dtype: {}".format(dtype))
-    return dtype, c_dtype
+    return dtype, c_dtypes.get(dtype.char)
 
 
 def _get_mode_enum(mode):
@@ -554,19 +427,13 @@ def _get_mode_enum(mode):
 
 
 @memoize(for_each_device=True)
-def _get_upfirdn_kernel_inner(up, down, case, c_dtype_data, c_dtype_filter,
+def _get_upfirdn_kernel_inner(up, down, c_dtype_data, c_dtype_filter,
                               c_dtype_out):
-    if up == 1:
-        code = _apply_batch_up1_template.replace(
-            'DTYPE_DATA', c_dtype_data)
-        func_name = '_apply_batch_up1'
-    elif down == 1:
-        code = _apply_batch_down1_template.replace(
-            'DTYPE_DATA', c_dtype_data)
-        func_name = '_apply_batch_down1'
-    else:
-        raise ValueError(
-            "CUDA kernels only implemented for cases with down=1 or up=1.")
+    func_name = '_apply_batch'
+
+    # crude template-like functionality via string replacement
+    code = _apply_batch_template.replace(
+        'DTYPE_DATA', c_dtype_data)
     code = code.replace(
         'DTYPE_FILTER', c_dtype_filter)
     code = code.replace(
@@ -588,6 +455,10 @@ def _get_upfirdn_kernel_inner(up, down, case, c_dtype_data, c_dtype_filter,
 
 
 def get_upfirdn_kernel(h, data, up, down):
+    """Compile an upfirdn kernel based on dtype.
+
+    Also converts h, data to the nearest supported floating point type.
+    """
     dtype_data, c_dtype_data = _fixup_dtype(data.dtype)
     if data.dtype != dtype_data:
         data = data.astype(dtype_data)
@@ -611,22 +482,52 @@ def get_upfirdn_kernel(h, data, up, down):
         dtype_out = dtype_data
     if h.dtype != dtype_filter:
         h = h.astype(dtype_filter)
-    if up == 1:
-        case = 0
-    elif down == 1:
-        case = 1
-    else:
-        raise ValueError(
-            "CUDA kernels only implemented for cases with down=1 or up=1.")
-    kern = _get_upfirdn_kernel_inner(up, down, case, c_dtype_data,
+
+    # memoized GPU kernels
+    kern = _get_upfirdn_kernel_inner(up, down, c_dtype_data,
                                      c_dtype_filter, c_dtype_out)
 
     return h, data, dtype_out, kern
 
 
+def _pad_h(h, up):
+    """Store coefficients in a transposed, flipped arrangement.
+
+    For example, suppose upRate is 3, and the
+    input number of coefficients is 10, represented as h[0], ..., h[9].
+
+    Then the internal buffer will look like this::
+
+       h[9], h[6], h[3], h[0],   // flipped phase 0 coefs
+       0,    h[7], h[4], h[1],   // flipped phase 1 coefs (zero-padded)
+       0,    h[8], h[5], h[2],   // flipped phase 2 coefs (zero-padded)
+
+    Notes
+    -----
+    This is a copy of the function from scipy.signal._upfirdn.py with cupy
+    support.
+    """
+    if up == 1:
+        return h[::-1].copy()  # copy to avoid negative strides
+    else:
+        lh = len(h)
+        h_padlen = lh + (-lh % up)
+        if h_padlen == 0:
+            h_full = h
+        else:
+            h_full = cupy.zeros(h_padlen, h.dtype)
+            h_full[:lh] = h
+        h_full = h_full.reshape(-1, up).T[:, ::-1].ravel()
+        # TODO: numpy doesn't need this ascontiguousarray here,
+        #       but cupy does to avoid negative strides!
+        h_full = cupy.ascontiguousarray(h_full)
+    return h_full
+
+
 def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
             block_size=32, prepadded=False, out=None, mode='zero',
-            cval=0, offset=0, crop=0, take=None, h_size_orig=None):
+            cval=0):
+
     # compile or retrieve cached kernel for the given dtypes
     h, x, dtype_out, kern = get_upfirdn_kernel(h, x, up=up, down=down)
 
@@ -634,18 +535,12 @@ def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
 
     mode_enum = _get_mode_enum(mode)
     cval = dtype_out.type(cval)
-    crop = int(crop)  # TODO: remove hardcode
-
-    offset_here = True
-    if offset_here:
-        offset = 0  # TODO: remove hardcode
 
     # flip the filter
     if prepadded:
         h_flip = h
     else:
-        from pyframelets._num import _pad_h
-        h_flip = _pad_h(h, up=up, xp=cupy)
+        h_flip = _pad_h(h, up=up)
 
     len_h = len(h_flip)
     if len_h > 128:
@@ -658,7 +553,7 @@ def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
     if axis != ndim - 1:
         x = x.swapaxes(axis, -1)
     out_shape = [s for s in x.shape]
-    out_len = _output_len(h_flip.size, x.shape[-1], up, down) - offset
+    out_len = _output_len(h_flip.size, x.shape[-1], up, down)
     out_shape[-1] = out_len
 
     x = cupy.ascontiguousarray(x)
@@ -681,37 +576,11 @@ def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
             "Grid size > MaxGridDimX for the GPU. Try increasing block_size.")
     if block_size > cuda_MaxBlockDimX:
         raise ValueError("block_size exceeds MaxBlockDimX for the GPU")
-    if up == 1:
-        kern((grid_size_x, ),
-             (block_size, ),
-             (x, x.shape[-1], h_flip, len_h, y, down, out_len, nbatch,
-              mode_enum, cval, offset, crop))
-    elif down == 1:
-        kern((grid_size_x, ),
-             (block_size, ),
-             (x, x.shape[-1], h_flip, len_h, y, up, out_len, nbatch,
-              mode_enum, cval, offset, crop))
+    kern((grid_size_x, ),
+         (block_size, ),
+         (x, x.shape[-1], h_flip, len_h, y, up, down, out_len, nbatch,
+          mode_enum, cval))
     y = y.reshape(out_shape, order='C')
-
-    if crop:
-        if offset_here:
-            # TODO: move into the kernel
-            if h_size_orig is None:
-                offset = len_h - 1
-            else:
-                offset = h_size_orig - 1
-            # print("offset = {}, len_h = {}, up={}, len(h)={}".format(offset, len_h, up, len(h)))
-            y_sl = [slice(None), ] * y.ndim
-            if take is None:
-                y_sl[-1] = slice(offset, None)
-            else:
-                y_sl[-1] = slice(offset, offset + take)
-            y = y[tuple(y_sl)]
-        else:
-            y_sl = [slice(None), ] * y.ndim
-            if take is not None:
-                y_sl[-1] = slice(take)
-                y = y[tuple(y_sl)]
 
     if axis != ndim - 1:
         y = y.swapaxes(axis, -1)
