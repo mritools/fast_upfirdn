@@ -28,7 +28,7 @@ Optional:
 
 import numpy as np
 import cupy
-from upfirdn_gpu import convolve_separable
+from upfirdn_gpu import convolve_separable, convolve1d, correlate1d, uniform_filter1d
 
 # separable 5x5x5 convolution kernel on the CPU
 x = np.random.randn(256, 256, 256).astype(np.float32)

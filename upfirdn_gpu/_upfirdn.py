@@ -279,7 +279,118 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
 """
 
 
-_apply_batch_template = include + """
+_convolved_batch_template = include + """
+
+extern "C" {
+
+__global__
+void _apply_batch(DTYPE_DATA *x, long long len_x,
+               DTYPE_FILTER *h_trans_flip,
+               long long len_h,
+               DTYPE_OUT *out,
+               long long out_axis_size,
+               long long nbatch,
+               long long _mode,
+               DTYPE_DATA cval,
+               long long origin,
+               long long center_crop)
+{
+    __shared__ DTYPE_FILTER h_trans_flip_s[128];
+    long long x_conv_idx;
+    long long i;
+    // TODO: set initial values for these constants outside the loop
+    long long unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
+    long long batch_idx = unraveled_idx / out_axis_size;
+    MODE mode = (MODE)_mode;
+
+    for (i=0; i<len_h; i++)
+    {
+        h_trans_flip_s[i] = h_trans_flip[i];
+    }
+
+    if (batch_idx < nbatch)
+    {
+        long long padded_len;
+        long long offset_x = batch_idx * len_x;
+        long long offset_out = batch_idx * out_axis_size;
+
+        long long y_idx = unraveled_idx - offset_out;
+        long long h_idx = 0;
+        long long x_idx = y_idx + origin;
+
+        DTYPE_OUT val = 0.0;
+        DTYPE_OUT xval;
+
+        bool zpad = ((mode == MODE_ZEROPAD));
+
+        if (center_crop)
+        {
+            padded_len = len_x + len_h / 2;
+            x_idx += len_h / 2;
+        } else
+        {
+            padded_len = len_x + len_h - 1;
+        }
+
+        if (x_idx < len_x)
+        {
+            x_conv_idx = x_idx - len_h + 1;
+            if (x_conv_idx < 0){
+                if (zpad)
+                {
+                    h_idx -= x_conv_idx;
+                }
+                else
+                {
+                    for (; x_conv_idx < 0; x_conv_idx++){
+                        xval = _extend_left(
+                            &x[offset_x], x_conv_idx, len_x, mode, cval);
+                        val += xval * h_trans_flip_s[h_idx];
+                        h_idx++;
+                    }
+                }
+                x_conv_idx = 0;
+            }
+            for (; x_conv_idx < x_idx + 1; x_conv_idx++){
+                val += x[offset_x + x_conv_idx] * h_trans_flip_s[h_idx];
+                h_idx++;
+            }
+            atomicAdd(&out[unraveled_idx], val);
+        }
+
+        // Use a second simplified loop to flush out the last bits
+        else if (x_idx < padded_len)
+        {
+            x_conv_idx = x_idx - len_h + 1;
+            for (; x_conv_idx < x_idx + 1; x_conv_idx++)
+            {
+                if (x_conv_idx >= len_x)
+                {
+                    xval = _extend_right(
+                        &x[offset_x], x_conv_idx, len_x, mode, cval);
+
+                }
+                else if (x_conv_idx < 0)
+                {
+                    xval = _extend_left(
+                        &x[offset_x], x_conv_idx, len_x, mode, cval);
+                }
+                else
+                {
+                    xval = x[offset_x + x_conv_idx];
+                }
+                val += xval * h_trans_flip_s[h_idx];
+                h_idx++;
+            }
+            atomicAdd(&out[unraveled_idx], val);
+        }
+    }
+}
+}
+"""
+
+
+_upfirdn_batch_template = include + """
 
 extern "C" {
 
@@ -293,7 +404,8 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
                   long long out_axis_size,
                   long long nbatch,
                   long long _mode,
-                  DTYPE_DATA cval)
+                  DTYPE_DATA cval,
+                  long long origin)
 {
     __shared__ DTYPE_FILTER h_trans_flip_s[128];
     long long x_conv_idx;
@@ -316,14 +428,15 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
         long long offset_out = batch_idx * out_axis_size;
 
         long long y_idx = unraveled_idx - offset_out;
-        long long t = (y_idx * down) % up;
+        long long t = ((y_idx + origin)*down) % up;
         long long h_idx = t * h_per_phase;
-        long long x_idx = (y_idx*down) / up;
+        long long x_idx = ((y_idx + origin)*down) / up;
 
         DTYPE_OUT val = 0.0;
         DTYPE_OUT xval;
 
         bool zpad = ((mode == MODE_ZEROPAD));
+
         padded_len = len_x + len_h - 1;
 
         if (x_idx < len_x)
@@ -391,9 +504,9 @@ c_dtypes = {'f': 'float',
             'D': 'complex<double>'}
 
 
-def _fixup_dtype(dtype):
+def _nearest_supported_float_dtype(dtype):
     if dtype.char in ['f', 'd', 'F', 'D']:
-        return dtype, c_dtypes.get(dtype.char)
+        return dtype
 
     # determine nearest single or double precision floating point type
     dtype = np.result_type(dtype, np.float32)
@@ -401,7 +514,7 @@ def _fixup_dtype(dtype):
         dtype = np.float64
     elif dtype.char == 'G':
         dtype = np.complex128
-    return dtype, c_dtypes.get(dtype.char)
+    return dtype
 
 
 def _get_mode_enum(mode):
@@ -432,12 +545,12 @@ def _get_upfirdn_kernel_inner(up, down, c_dtype_data, c_dtype_filter,
     func_name = '_apply_batch'
 
     # crude template-like functionality via string replacement
-    code = _apply_batch_template.replace(
-        'DTYPE_DATA', c_dtype_data)
-    code = code.replace(
-        'DTYPE_FILTER', c_dtype_filter)
-    code = code.replace(
-        'DTYPE_OUT', c_dtype_out)
+    if (up == down == 1):
+        code = _convolved_batch_template.replace('DTYPE_DATA', c_dtype_data)
+    else:
+        code = _upfirdn_batch_template.replace('DTYPE_DATA', c_dtype_data)
+    code = code.replace('DTYPE_FILTER', c_dtype_filter)
+    code = code.replace('DTYPE_OUT', c_dtype_out)
 
     if cupy.cuda.nvrtc.getVersion() < (9, 2):
         # __shared__ complex<T> doesn't work on older CUDA compilers
@@ -459,9 +572,10 @@ def get_upfirdn_kernel(h, data, up, down):
 
     Also converts h, data to the nearest supported floating point type.
     """
-    dtype_data, c_dtype_data = _fixup_dtype(data.dtype)
+    dtype_data = _nearest_supported_float_dtype(data.dtype)
     if data.dtype != dtype_data:
         data = data.astype(dtype_data)
+    c_dtype_data = c_dtypes.get(dtype_data.char)
 
     # convert h to the same precision as data if there is a mismatch
     if data.real.dtype != h.real.dtype:
@@ -471,7 +585,8 @@ def get_upfirdn_kernel(h, data, up, down):
             h_dtype = np.result_type(data.real.dtype, np.float32)
         h = h.astype(h_dtype)
 
-    dtype_filter, c_dtype_filter = _fixup_dtype(h.dtype)
+    dtype_filter = _nearest_supported_float_dtype(h.dtype)
+    c_dtype_filter = c_dtypes.get(dtype_filter.char)
     if 'complex' in c_dtype_filter:
         # output is complex if filter is complex
         c_dtype_out = c_dtype_filter
@@ -524,9 +639,94 @@ def _pad_h(h, up):
     return h_full
 
 
+def _convolve1d(h, x, axis=-1, contiguous_output=False, block_size=32,
+                out=None, mode='zero', cval=0, origin=0, center_crop=False):
+    """
+
+    out : use a preallocated output array.
+        Unless filtering is being performed along the last axis, a copy may
+        have to be made. For this reason, one should not rely on operation
+        upon the ``out`` array to be in-place.
+    """
+
+    # compile or retrieve cached kernel for the given dtypes
+    h, x, dtype_out, kern = get_upfirdn_kernel(h, x, up=1, down=1)
+
+    ndim = x.ndim
+
+    mode_enum = _get_mode_enum(mode)
+    cval = dtype_out.type(cval)
+
+    # flip the filter
+    h_flip = h[::-1].copy()  # copy to avoid negative strides
+
+    len_h = len(h_flip)
+    if len_h > 128:
+        raise ValueError(
+            "CUDA implementation currently assumes filter length is <= 128.")
+
+    if axis < -ndim or axis > ndim - 1:
+        raise ValueError("axis out of range")
+    axis = axis % x.ndim
+    if axis != ndim - 1:
+        x = x.swapaxes(axis, -1)
+    out_shape = [s for s in x.shape]
+    if not center_crop:
+        out_len = x.shape[-1] + len_h - 1
+    else:
+        out_len = x.shape[-1]
+    out_shape[-1] = out_len
+
+    x = cupy.ascontiguousarray(x)
+    x = x.reshape((-1, x.shape[-1]), order='C')
+    nbatch = x.shape[0]
+
+    if out is None:
+        y = cupy.zeros((nbatch, out_len), dtype=dtype_out)
+    else:
+        # output into preallocated array
+        if axis != ndim - 1:
+            out = out.swapaxes(-1, axis)
+        if out.size != nbatch * out_len or out.shape[-1] != out_len:
+            raise ValueError("out array has the wrong size")
+        elif out.dtype != dtype_out:
+            raise ValueError(
+                "Expected an out array with dtype: {}".format(dtype_out))
+        if not out.flags.c_contiguous:
+            out = cupy.ascontiguousarray(out)
+        out[:] = 0.
+        y = out
+
+    grid_size_x = ceil(y.size / block_size)
+    if grid_size_x > cuda_MaxGridDimX:
+        raise ValueError(
+            "Grid size > MaxGridDimX for the GPU. Try increasing block_size.")
+    if block_size > cuda_MaxBlockDimX:
+        raise ValueError("block_size exceeds MaxBlockDimX for the GPU")
+
+    kern((grid_size_x, ),
+         (block_size, ),
+         (x, x.shape[-1], h_flip, len_h, y, out_len, nbatch,
+          mode_enum, cval, origin, center_crop))
+    y = y.reshape(out_shape, order='C')
+
+    if axis != ndim - 1:
+        y = y.swapaxes(axis, -1)
+    if contiguous_output:
+        y = cupy.ascontiguousarray(y)
+    return y
+
+
 def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
             block_size=32, prepadded=False, out=None, mode='zero',
-            cval=0):
+            cval=0, origin=0, center_crop=False):
+    """
+
+    out : use a preallocated output array.
+        Unless filtering is being performed along the last axis, a copy may
+        have to be made. For this reason, one should not rely on operation
+        upon the ``out`` array to be in-place.
+    """
 
     # compile or retrieve cached kernel for the given dtypes
     h, x, dtype_out, kern = get_upfirdn_kernel(h, x, up=up, down=down)
@@ -564,10 +764,16 @@ def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
         y = cupy.zeros((nbatch, out_len), dtype=dtype_out)
     else:
         # output into preallocated array
-        if out.size != nbatch * out_len:
+        if axis != ndim - 1:
+            out = out.swapaxes(-1, axis)
+        if out.size != nbatch * out_len or out.shape[-1] != out_len:
             raise ValueError("out array has the wrong size")
-        elif not out.flags.c_contiguous:
-            raise ValueError("out array must be C contiguous")
+        elif out.dtype != dtype_out:
+            raise ValueError(
+                "Expected an out array with dtype: {}".format(dtype_out))
+        if not out.flags.c_contiguous:
+            out = cupy.ascontiguousarray(out)
+        out[:] = 0.
         y = out
 
     grid_size_x = ceil(y.size / block_size)
@@ -576,10 +782,17 @@ def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
             "Grid size > MaxGridDimX for the GPU. Try increasing block_size.")
     if block_size > cuda_MaxBlockDimX:
         raise ValueError("block_size exceeds MaxBlockDimX for the GPU")
-    kern((grid_size_x, ),
-         (block_size, ),
-         (x, x.shape[-1], h_flip, len_h, y, up, down, out_len, nbatch,
-          mode_enum, cval))
+    if (up == down == 1):
+        center_crop = False
+        kern((grid_size_x, ),
+             (block_size, ),
+             (x, x.shape[-1], h_flip, len_h, y, out_len, nbatch,
+              mode_enum, cval, origin, center_crop))
+    else:
+        kern((grid_size_x, ),
+             (block_size, ),
+             (x, x.shape[-1], h_flip, len_h, y, up, down, out_len, nbatch,
+              mode_enum, cval, origin))
     y = y.reshape(out_shape, order='C')
 
     if axis != ndim - 1:
