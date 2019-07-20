@@ -30,7 +30,7 @@ def _output_len(len_h, in_len, up, down):
     return need
 
 
-include = r"""
+_include = r"""
 #include <cupy/complex.cuh>
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 600
@@ -280,8 +280,8 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
 
 
 _convolved_batch_template = (
-    include
-    + """
+    _include
+    + r"""
 
 extern "C" {
 
@@ -295,7 +295,7 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
                long long _mode,
                DTYPE_DATA cval,
                long long origin,
-               long long center_crop)
+               long long crop)
 {
     __shared__ DTYPE_FILTER h_trans_flip_s[128];
     long long x_conv_idx;
@@ -325,7 +325,7 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
 
         bool zpad = ((mode == MODE_ZEROPAD));
 
-        if (center_crop)
+        if (crop)
         {
             padded_len = len_x + len_h / 2;
             x_idx += len_h / 2;
@@ -393,9 +393,7 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
 )
 
 
-_upfirdn_batch_template = (
-    include
-    + """
+_upfirdn_part1_shared_h = r"""
 
 extern "C" {
 
@@ -410,7 +408,8 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
                   long long nbatch,
                   long long _mode,
                   DTYPE_DATA cval,
-                  long long origin)
+                  long long origin,
+                  long long crop)
 {
     __shared__ DTYPE_FILTER h_trans_flip_s[128];
     long long x_conv_idx;
@@ -420,10 +419,41 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
     long long batch_idx = unraveled_idx / out_axis_size;
     MODE mode = (MODE)_mode;
 
+    // copy filter to shared memory
     for (i=0; i<len_h; i++)
     {
-        h_trans_flip_s[i] = h_trans_flip[i];
+       h_trans_flip_s[i] = h_trans_flip[i];
     }
+"""
+
+_upfirdn_part1_nonshared_h = r"""
+
+extern "C" {
+
+__global__
+void _apply_batch(DTYPE_DATA *x, long long len_x,
+                  DTYPE_FILTER *h_trans_flip_s,
+                  long long len_h,
+                  DTYPE_OUT *out,
+                  long long up,
+                  long long down,
+                  long long out_axis_size,
+                  long long nbatch,
+                  long long _mode,
+                  DTYPE_DATA cval,
+                  long long origin,
+                  long long crop)
+{
+    long long x_conv_idx;
+    long long i;
+    // TODO: set initial values for these constants outside the loop
+    long long unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
+    long long batch_idx = unraveled_idx / out_axis_size;
+    MODE mode = (MODE)_mode;
+
+"""
+
+_upfirdn_template_part2 = r"""
 
     if (batch_idx < nbatch)
     {
@@ -439,10 +469,13 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
 
         DTYPE_OUT val = 0.0;
         DTYPE_OUT xval;
+        DTYPE_OUT hval = 0.0;
 
         bool zpad = ((mode == MODE_ZEROPAD));
-
-        padded_len = len_x + len_h - 1;
+        if (crop)
+            padded_len = len_x;
+        else
+            padded_len = len_x + len_h - 1;
 
         if (x_idx < len_x)
         {
@@ -455,16 +488,24 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
                 else
                 {
                     for (; x_conv_idx < 0; x_conv_idx++){
-                        xval = _extend_left(
-                            &x[offset_x], x_conv_idx, len_x, mode, cval);
-                        val += xval * h_trans_flip_s[h_idx];
+                        hval = h_trans_flip_s[h_idx];
+                        if (hval != DTYPE_FILTER(0))
+                        {
+                            xval = _extend_left(
+                                &x[offset_x], x_conv_idx, len_x, mode, cval);
+                            val += xval * hval;
+                        }
                         h_idx++;
                     }
                 }
                 x_conv_idx = 0;
             }
             for (; x_conv_idx < x_idx + 1; x_conv_idx++){
-                val += x[offset_x + x_conv_idx] * h_trans_flip_s[h_idx];
+                hval = h_trans_flip_s[h_idx];
+                if (hval != DTYPE_FILTER(0))
+                {
+                    val += x[offset_x + x_conv_idx] * hval;
+                }
                 h_idx++;
             }
             atomicAdd(&out[unraveled_idx], val);
@@ -476,22 +517,26 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
             x_conv_idx = x_idx - h_per_phase + 1;
             for (; x_conv_idx < x_idx + 1; x_conv_idx++)
             {
-                if (x_conv_idx >= len_x)
+                hval = h_trans_flip_s[h_idx];
+                if (hval != DTYPE_FILTER(0))
                 {
-                    xval = _extend_right(
-                        &x[offset_x], x_conv_idx, len_x, mode, cval);
+                    if (x_conv_idx >= len_x)
+                    {
+                        xval = _extend_right(
+                            &x[offset_x], x_conv_idx, len_x, mode, cval);
 
+                    }
+                    else if (x_conv_idx < 0)
+                    {
+                        xval = _extend_left(
+                            &x[offset_x], x_conv_idx, len_x, mode, cval);
+                    }
+                    else
+                    {
+                        xval = x[offset_x + x_conv_idx];
+                    }
+                    val += xval * hval;
                 }
-                else if (x_conv_idx < 0)
-                {
-                    xval = _extend_left(
-                        &x[offset_x], x_conv_idx, len_x, mode, cval);
-                }
-                else
-                {
-                    xval = x[offset_x + x_conv_idx];
-                }
-                val += xval * h_trans_flip_s[h_idx];
                 h_idx++;
             }
             atomicAdd(&out[unraveled_idx], val);
@@ -500,6 +545,19 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
 }
 }
 """
+
+# version where the filter, h, is copied into local shared memory
+_upfirdn_batch_template_shared_h = (
+    _include
+    + _upfirdn_part1_shared_h
+    + _upfirdn_template_part2
+)
+
+# version where the filter, h, is not copied into local shared memory
+_upfirdn_batch_template_nonshared_h = (
+    _include
+    + _upfirdn_part1_nonshared_h
+    + _upfirdn_template_part2
 )
 
 
@@ -514,7 +572,7 @@ c_dtypes = {
 
 def _nearest_supported_float_dtype(dtype):
     if dtype.char in ["f", "d", "F", "D"]:
-        return dtype
+        return dtype, c_dtypes.get(dtype.char)
 
     # determine nearest single or double precision floating point type
     dtype = np.result_type(dtype, np.float32)
@@ -522,7 +580,7 @@ def _nearest_supported_float_dtype(dtype):
         dtype = np.float64
     elif dtype.char == "G":
         dtype = np.complex128
-    return dtype
+    return dtype, c_dtypes.get(dtype.char)
 
 
 def _get_mode_enum(mode):
@@ -549,7 +607,7 @@ def _get_mode_enum(mode):
 
 @memoize(for_each_device=True)
 def _get_upfirdn_kernel_inner(
-    up, down, c_dtype_data, c_dtype_filter, c_dtype_out
+    up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h_size
 ):
     func_name = "_apply_batch"
 
@@ -557,7 +615,11 @@ def _get_upfirdn_kernel_inner(
     if up == down == 1:
         code = _convolved_batch_template.replace("DTYPE_DATA", c_dtype_data)
     else:
-        code = _upfirdn_batch_template.replace("DTYPE_DATA", c_dtype_data)
+        if h_size <= 128:
+            code = _upfirdn_batch_template_shared_h.replace("DTYPE_DATA", c_dtype_data)
+        else:
+            code = _upfirdn_batch_template_nonshared_h.replace("DTYPE_DATA", c_dtype_data)
+
     code = code.replace("DTYPE_FILTER", c_dtype_filter)
     code = code.replace("DTYPE_OUT", c_dtype_out)
 
@@ -581,10 +643,9 @@ def get_upfirdn_kernel(h, data, up, down):
 
     Also converts h, data to the nearest supported floating point type.
     """
-    dtype_data = _nearest_supported_float_dtype(data.dtype)
+    dtype_data, c_dtype_data = _nearest_supported_float_dtype(data.dtype)
     if data.dtype != dtype_data:
         data = data.astype(dtype_data)
-    c_dtype_data = c_dtypes.get(dtype_data.char)
 
     # convert h to the same precision as data if there is a mismatch
     if data.real.dtype != h.real.dtype:
@@ -594,8 +655,7 @@ def get_upfirdn_kernel(h, data, up, down):
             h_dtype = np.result_type(data.real.dtype, np.float32)
         h = h.astype(h_dtype)
 
-    dtype_filter = _nearest_supported_float_dtype(h.dtype)
-    c_dtype_filter = c_dtypes.get(dtype_filter.char)
+    dtype_filter, c_dtype_filter = _nearest_supported_float_dtype(h.dtype)
     if "complex" in c_dtype_filter:
         # output is complex if filter is complex
         c_dtype_out = c_dtype_filter
@@ -609,7 +669,7 @@ def get_upfirdn_kernel(h, data, up, down):
 
     # memoized GPU kernels
     kern = _get_upfirdn_kernel_inner(
-        up, down, c_dtype_data, c_dtype_filter, c_dtype_out
+        up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h.size,
     )
 
     return h, data, dtype_out, kern
@@ -659,7 +719,7 @@ def _convolve1d(
     mode="zero",
     cval=0,
     origin=0,
-    center_crop=False,
+    crop=False,
 ):
     """
 
@@ -692,7 +752,7 @@ def _convolve1d(
     if axis != ndim - 1:
         x = x.swapaxes(axis, -1)
     out_shape = [s for s in x.shape]
-    if not center_crop:
+    if not crop:
         out_len = x.shape[-1] + len_h - 1
     else:
         out_len = x.shape[-1]
@@ -741,7 +801,7 @@ def _convolve1d(
             mode_enum,
             cval,
             origin,
-            center_crop,
+            crop,
         ),
     )
     y = y.reshape(out_shape, order="C")
@@ -765,8 +825,11 @@ def upfirdn(
     out=None,
     mode="zero",
     cval=0,
+    offset=0,
+    crop=False,
+    take=None,
+    h_size_orig=None,
     origin=0,
-    center_crop=False,
 ):
     """
 
@@ -775,6 +838,10 @@ def upfirdn(
         have to be made. For this reason, one should not rely on operation
         upon the ``out`` array to be in-place.
     """
+    if not isinstance(h, cupy.ndarray):
+        h = cupy.asarray(h)
+    if not isinstance(x, cupy.ndarray):
+        x = cupy.asarray(x)
 
     # compile or retrieve cached kernel for the given dtypes
     h, x, dtype_out, kern = get_upfirdn_kernel(h, x, up=up, down=down)
@@ -791,10 +858,10 @@ def upfirdn(
         h_flip = _pad_h(h, up=up)
 
     len_h = len(h_flip)
-    if len_h > 128:
-        raise ValueError(
-            "CUDA implementation currently assumes filter length is <= 128."
-        )
+    # if len_h > 128:
+    #     raise ValueError(
+    #         "CUDA implementation currently assumes filter length is <= 128."
+    #     )
 
     if axis < -ndim or axis > ndim - 1:
         raise ValueError("axis out of range")
@@ -834,7 +901,6 @@ def upfirdn(
     if block_size > cuda_MaxBlockDimX:
         raise ValueError("block_size exceeds MaxBlockDimX for the GPU")
     if up == down == 1:
-        center_crop = False
         kern(
             (grid_size_x,),
             (block_size,),
@@ -849,7 +915,7 @@ def upfirdn(
                 mode_enum,
                 cval,
                 origin,
-                center_crop,
+                False,  # crop not fully implemented in the kernel yet
             ),
         )
     else:
@@ -869,9 +935,23 @@ def upfirdn(
                 mode_enum,
                 cval,
                 origin,
+                False,  # crop not fully implemented in the kernel yet
             ),
         )
     y = y.reshape(out_shape, order="C")
+
+    if crop:
+        # TODO: move into the kernel
+        if h_size_orig is None:
+            offset = len_h - 1
+        else:
+            offset = h_size_orig - 1
+        y_sl = [slice(None)] * y.ndim
+        if take is None:
+            y_sl[-1] = slice(offset, None)
+        else:
+            y_sl[-1] = slice(offset, offset + take)
+        y = y[tuple(y_sl)]
 
     if axis != ndim - 1:
         y = y.swapaxes(axis, -1)

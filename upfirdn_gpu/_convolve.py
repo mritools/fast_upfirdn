@@ -45,7 +45,7 @@ def _fixup_dtypes(data, h):
 
     Also converts h, data to the nearest supported floating point type.
     """
-    dtype_data = _nearest_supported_float_dtype(data.dtype)
+    dtype_data, _ = _nearest_supported_float_dtype(data.dtype)
     if data.dtype != dtype_data:
         data = data.astype(dtype_data)
 
@@ -57,7 +57,7 @@ def _fixup_dtypes(data, h):
             h_dtype = np.result_type(data.real.dtype, np.float32)
         h = h.astype(h_dtype)
 
-    dtype_filter = _nearest_supported_float_dtype(h.dtype)
+    dtype_filter, _ = _nearest_supported_float_dtype(h.dtype)
     if h.dtype != dtype_filter:
         h = h.astype(dtype_filter)
 
@@ -94,7 +94,7 @@ def convolve1d(
     cval=0,
     origin=0,
     xp=None,
-    crop=False,
+    crop=True,
 ):
     """Calculate a one-dimensional convolution along the given axis.
 
@@ -125,6 +125,9 @@ def convolve1d(
     """
     xp = cupy.get_array_module(input)
     if xp == np:
+        if crop != True:
+            raise ValueError(
+                "ndimage.convolve1d only supports cropped convolution.")
         return ndi.convolve1d(
             input,
             weights,
@@ -170,7 +173,7 @@ def convolve1d(
         input,
         axis=axis,
         origin=origin,
-        center_crop=True,
+        crop=crop,
         out=output,
         **mode_kwarg
     )
@@ -412,7 +415,7 @@ def convolve(a, v, mode="full"):
 
     # Note _convolve1d always computes in floating point
     out = _convolve1d(
-        v, a, axis=0, origin=origin, center_crop=crop, mode="zero"
+        v, a, axis=0, origin=origin, crop=crop, mode="zero"
     )
 
     if mode == "valid":
