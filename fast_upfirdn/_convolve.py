@@ -5,7 +5,11 @@ import scipy.ndimage as ndi
 
 import cupy
 
-from upfirdn_gpu._upfirdn import _convolve1d, _nearest_supported_float_dtype
+from fast_upfirdn.cupy._upfirdn import (
+    _convolve1d,
+    _nearest_supported_float_dtype,
+)
+
 
 __all__ = [
     "convolve1d",

@@ -3,7 +3,7 @@ from itertools import product
 import numpy as np
 import pytest
 
-from upfirdn_gpu import convolve_separable
+from fast_upfirdn import convolve_separable
 
 cupy = pytest.importorskip("cupy")
 

@@ -4,7 +4,7 @@ setup = """
 import cupy
 import numpy as np
 from scipy.signal import upfirdn as upfirdn_scipy
-from upfirdn_gpu import upfirdn
+from fast_upfirdn import upfirdn
 
 d = cupy.cuda.device.Device()
 order = 'C'

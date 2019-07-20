@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from scipy.signal import upfirdn as upfirdn_scipy
-from upfirdn_gpu import upfirdn
+from fast_upfirdn import upfirdn
 
 cupy = pytest.importorskip("cupy")
 testing = pytest.importorskip("cupy.testing")

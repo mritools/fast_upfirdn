@@ -2,11 +2,11 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="upfirdn_gpu",
+    name="fast_upfirdn",
     packages=find_packages(),
     version="0.1",
     description="GPU implementation of upfirdn and convolve.",
-    author="Gregory Lee",
+    author="Gregory R. Lee",
     author_email="grlee77@gmail.com",
     # url='',
     license="BSD 3-clause",
