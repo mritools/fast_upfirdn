@@ -9,9 +9,9 @@ from cupy.util import memoize
 try:
     # Device Attributes require CuPy > 6.0.b3
     d = cupy.cuda.device.Device(0)
-    cuda_MaxBlockDimX = d.attributes['MaxBlockDimX']
-    cuda_MaxGridDimX = d.attributes['MaxGridDimX']
-except AttributeError:
+    cuda_MaxBlockDimX = d.attributes["MaxBlockDimX"]
+    cuda_MaxGridDimX = d.attributes["MaxGridDimX"]
+except (cupy.cuda.runtime.CUDARuntimeError, AttributeError):
     # guess
     cuda_MaxBlockDimX = 1024
     cuda_MaxGridDimX = 2147483647
@@ -279,7 +279,9 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
 """
 
 
-_convolved_batch_template = include + """
+_convolved_batch_template = (
+    include
+    + """
 
 extern "C" {
 
@@ -388,9 +390,12 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
 }
 }
 """
+)
 
 
-_upfirdn_batch_template = include + """
+_upfirdn_batch_template = (
+    include
+    + """
 
 extern "C" {
 
@@ -495,62 +500,66 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
 }
 }
 """
+)
 
 
 # dictionary: CUDA C data types corresponding to numpy dtype.char values
-c_dtypes = {'f': 'float',
-            'd': 'double',
-            'F': 'complex<float>',
-            'D': 'complex<double>'}
+c_dtypes = {
+    "f": "float",
+    "d": "double",
+    "F": "complex<float>",
+    "D": "complex<double>",
+}
 
 
 def _nearest_supported_float_dtype(dtype):
-    if dtype.char in ['f', 'd', 'F', 'D']:
+    if dtype.char in ["f", "d", "F", "D"]:
         return dtype
 
     # determine nearest single or double precision floating point type
     dtype = np.result_type(dtype, np.float32)
-    if dtype.char == 'g':
+    if dtype.char == "g":
         dtype = np.float64
-    elif dtype.char == 'G':
+    elif dtype.char == "G":
         dtype = np.complex128
     return dtype
 
 
 def _get_mode_enum(mode):
     mode = mode.lower()
-    if mode == 'zero':
+    if mode == "zero":
         return 0
-    elif mode == 'symmetric':
+    elif mode == "symmetric":
         return 1
-    elif mode == 'constant':
+    elif mode == "constant":
         return 2
-    elif mode == 'smooth':
+    elif mode == "smooth":
         return 3
-    elif mode == 'periodic':
+    elif mode == "periodic":
         return 4
-    elif mode == 'reflect':
+    elif mode == "reflect":
         return 5
-    elif mode == 'antisymmetric':
+    elif mode == "antisymmetric":
         return 6
-    elif mode == 'antireflect':
+    elif mode == "antireflect":
         return 7
     else:
         raise ValueError("Unknown mode: {}".format(mode))
 
 
 @memoize(for_each_device=True)
-def _get_upfirdn_kernel_inner(up, down, c_dtype_data, c_dtype_filter,
-                              c_dtype_out):
-    func_name = '_apply_batch'
+def _get_upfirdn_kernel_inner(
+    up, down, c_dtype_data, c_dtype_filter, c_dtype_out
+):
+    func_name = "_apply_batch"
 
     # crude template-like functionality via string replacement
-    if (up == down == 1):
-        code = _convolved_batch_template.replace('DTYPE_DATA', c_dtype_data)
+    if up == down == 1:
+        code = _convolved_batch_template.replace("DTYPE_DATA", c_dtype_data)
     else:
-        code = _upfirdn_batch_template.replace('DTYPE_DATA', c_dtype_data)
-    code = code.replace('DTYPE_FILTER', c_dtype_filter)
-    code = code.replace('DTYPE_OUT', c_dtype_out)
+        code = _upfirdn_batch_template.replace("DTYPE_DATA", c_dtype_data)
+    code = code.replace("DTYPE_FILTER", c_dtype_filter)
+    code = code.replace("DTYPE_OUT", c_dtype_out)
 
     if cupy.cuda.nvrtc.getVersion() < (9, 2):
         # __shared__ complex<T> doesn't work on older CUDA compilers
@@ -561,7 +570,7 @@ def _get_upfirdn_kernel_inner(up, down, c_dtype_data, c_dtype_filter,
         non-empty in some scenarios, and generated a spurious diagnostic.
         The bug has now been fixed.
         """
-        code = code.replace('__shared__ complex', 'complex')
+        code = code.replace("__shared__ complex", "complex")
 
     kern = cupy.RawKernel(code, func_name)
     return kern
@@ -587,7 +596,7 @@ def get_upfirdn_kernel(h, data, up, down):
 
     dtype_filter = _nearest_supported_float_dtype(h.dtype)
     c_dtype_filter = c_dtypes.get(dtype_filter.char)
-    if 'complex' in c_dtype_filter:
+    if "complex" in c_dtype_filter:
         # output is complex if filter is complex
         c_dtype_out = c_dtype_filter
         dtype_out = dtype_filter
@@ -599,8 +608,9 @@ def get_upfirdn_kernel(h, data, up, down):
         h = h.astype(dtype_filter)
 
     # memoized GPU kernels
-    kern = _get_upfirdn_kernel_inner(up, down, c_dtype_data,
-                                     c_dtype_filter, c_dtype_out)
+    kern = _get_upfirdn_kernel_inner(
+        up, down, c_dtype_data, c_dtype_filter, c_dtype_out
+    )
 
     return h, data, dtype_out, kern
 
@@ -639,8 +649,18 @@ def _pad_h(h, up):
     return h_full
 
 
-def _convolve1d(h, x, axis=-1, contiguous_output=False, block_size=32,
-                out=None, mode='zero', cval=0, origin=0, center_crop=False):
+def _convolve1d(
+    h,
+    x,
+    axis=-1,
+    contiguous_output=False,
+    block_size=32,
+    out=None,
+    mode="zero",
+    cval=0,
+    origin=0,
+    center_crop=False,
+):
     """
 
     out : use a preallocated output array.
@@ -663,7 +683,8 @@ def _convolve1d(h, x, axis=-1, contiguous_output=False, block_size=32,
     len_h = len(h_flip)
     if len_h > 128:
         raise ValueError(
-            "CUDA implementation currently assumes filter length is <= 128.")
+            "CUDA implementation currently assumes filter length is <= 128."
+        )
 
     if axis < -ndim or axis > ndim - 1:
         raise ValueError("axis out of range")
@@ -678,7 +699,7 @@ def _convolve1d(h, x, axis=-1, contiguous_output=False, block_size=32,
     out_shape[-1] = out_len
 
     x = cupy.ascontiguousarray(x)
-    x = x.reshape((-1, x.shape[-1]), order='C')
+    x = x.reshape((-1, x.shape[-1]), order="C")
     nbatch = x.shape[0]
 
     if out is None:
@@ -691,24 +712,39 @@ def _convolve1d(h, x, axis=-1, contiguous_output=False, block_size=32,
             raise ValueError("out array has the wrong size")
         elif out.dtype != dtype_out:
             raise ValueError(
-                "Expected an out array with dtype: {}".format(dtype_out))
+                "Expected an out array with dtype: {}".format(dtype_out)
+            )
         if not out.flags.c_contiguous:
             out = cupy.ascontiguousarray(out)
-        out[:] = 0.
+        out[:] = 0.0
         y = out
 
     grid_size_x = ceil(y.size / block_size)
     if grid_size_x > cuda_MaxGridDimX:
         raise ValueError(
-            "Grid size > MaxGridDimX for the GPU. Try increasing block_size.")
+            "Grid size > MaxGridDimX for the GPU. Try increasing block_size."
+        )
     if block_size > cuda_MaxBlockDimX:
         raise ValueError("block_size exceeds MaxBlockDimX for the GPU")
 
-    kern((grid_size_x, ),
-         (block_size, ),
-         (x, x.shape[-1], h_flip, len_h, y, out_len, nbatch,
-          mode_enum, cval, origin, center_crop))
-    y = y.reshape(out_shape, order='C')
+    kern(
+        (grid_size_x,),
+        (block_size,),
+        (
+            x,
+            x.shape[-1],
+            h_flip,
+            len_h,
+            y,
+            out_len,
+            nbatch,
+            mode_enum,
+            cval,
+            origin,
+            center_crop,
+        ),
+    )
+    y = y.reshape(out_shape, order="C")
 
     if axis != ndim - 1:
         y = y.swapaxes(axis, -1)
@@ -717,9 +753,21 @@ def _convolve1d(h, x, axis=-1, contiguous_output=False, block_size=32,
     return y
 
 
-def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
-            block_size=32, prepadded=False, out=None, mode='zero',
-            cval=0, origin=0, center_crop=False):
+def upfirdn(
+    h,
+    x,
+    up=1,
+    down=1,
+    axis=-1,
+    contiguous_output=False,
+    block_size=32,
+    prepadded=False,
+    out=None,
+    mode="zero",
+    cval=0,
+    origin=0,
+    center_crop=False,
+):
     """
 
     out : use a preallocated output array.
@@ -745,7 +793,8 @@ def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
     len_h = len(h_flip)
     if len_h > 128:
         raise ValueError(
-            "CUDA implementation currently assumes filter length is <= 128.")
+            "CUDA implementation currently assumes filter length is <= 128."
+        )
 
     if axis < -ndim or axis > ndim - 1:
         raise ValueError("axis out of range")
@@ -757,7 +806,7 @@ def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
     out_shape[-1] = out_len
 
     x = cupy.ascontiguousarray(x)
-    x = x.reshape((-1, x.shape[-1]), order='C')
+    x = x.reshape((-1, x.shape[-1]), order="C")
     nbatch = x.shape[0]
 
     if out is None:
@@ -770,30 +819,59 @@ def upfirdn(h, x, up=1, down=1, axis=-1, contiguous_output=False,
             raise ValueError("out array has the wrong size")
         elif out.dtype != dtype_out:
             raise ValueError(
-                "Expected an out array with dtype: {}".format(dtype_out))
+                "Expected an out array with dtype: {}".format(dtype_out)
+            )
         if not out.flags.c_contiguous:
             out = cupy.ascontiguousarray(out)
-        out[:] = 0.
+        out[:] = 0.0
         y = out
 
     grid_size_x = ceil(y.size / block_size)
     if grid_size_x > cuda_MaxGridDimX:
         raise ValueError(
-            "Grid size > MaxGridDimX for the GPU. Try increasing block_size.")
+            "Grid size > MaxGridDimX for the GPU. Try increasing block_size."
+        )
     if block_size > cuda_MaxBlockDimX:
         raise ValueError("block_size exceeds MaxBlockDimX for the GPU")
-    if (up == down == 1):
+    if up == down == 1:
         center_crop = False
-        kern((grid_size_x, ),
-             (block_size, ),
-             (x, x.shape[-1], h_flip, len_h, y, out_len, nbatch,
-              mode_enum, cval, origin, center_crop))
+        kern(
+            (grid_size_x,),
+            (block_size,),
+            (
+                x,
+                x.shape[-1],
+                h_flip,
+                len_h,
+                y,
+                out_len,
+                nbatch,
+                mode_enum,
+                cval,
+                origin,
+                center_crop,
+            ),
+        )
     else:
-        kern((grid_size_x, ),
-             (block_size, ),
-             (x, x.shape[-1], h_flip, len_h, y, up, down, out_len, nbatch,
-              mode_enum, cval, origin))
-    y = y.reshape(out_shape, order='C')
+        kern(
+            (grid_size_x,),
+            (block_size,),
+            (
+                x,
+                x.shape[-1],
+                h_flip,
+                len_h,
+                y,
+                up,
+                down,
+                out_len,
+                nbatch,
+                mode_enum,
+                cval,
+                origin,
+            ),
+        )
+    y = y.reshape(out_shape, order="C")
 
     if axis != ndim - 1:
         y = y.swapaxes(axis, -1)

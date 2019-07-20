@@ -5,17 +5,17 @@ import pytest
 
 from upfirdn_gpu import convolve_separable
 
-cupy = pytest.importorskip('cupy')
+cupy = pytest.importorskip("cupy")
 
 
 @pytest.mark.parametrize(
-    'shape, filter_length, dtype, mode',
+    "shape, filter_length, dtype, mode",
     product(
-        [(12, ), (16, 14), (7, 5, 8)],  # shape
+        [(12,), (16, 14), (7, 5, 8)],  # shape
         [3, 4],  # filter_length
         [np.float32, np.float64, np.complex64, np.complex128],  # dtype
-        ['reflect', 'constant', 'nearest', 'mirror', 'wrap'],   # mode
-    )
+        ["reflect", "constant", "nearest", "mirror", "wrap"],  # mode
+    ),
 )
 def test_convolve_separable(shape, filter_length, dtype, mode):
     if dtype in [np.float32, np.complex64]:

@@ -7,21 +7,20 @@ import cupy
 
 from upfirdn_gpu._upfirdn import _convolve1d, _nearest_supported_float_dtype
 
-__all__ = ['convolve1d', 'correlate1d', 'uniform_filter1d', 'uniform_filter',
-           'convolve_separable']
-
-
-if sys.version_info[0] == 3:
-    string_types = str,
-else:
-    string_types = basestring,
+__all__ = [
+    "convolve1d",
+    "correlate1d",
+    "uniform_filter1d",
+    "uniform_filter",
+    "convolve_separable",
+]
 
 
 def _check_axis(axis, rank):
     if axis < 0:
         axis += rank
     if axis < 0 or axis >= rank:
-        raise ValueError('invalid axis')
+        raise ValueError("invalid axis")
     return axis
 
 
@@ -32,7 +31,7 @@ def _get_output(output, input, shape=None):
         output = cupy.zeros(shape, dtype=input.dtype.name)
     elif type(output) in [type(type), type(cupy.zeros((4,)).dtype)]:
         output = cupy.zeros(shape, dtype=output)
-    elif isinstance(output, string_types):
+    elif isinstance(output, str):
         output = cupy.typeDict[output]
         output = cupy.zeros(shape, dtype=output)
     elif output.shape != shape:
@@ -76,8 +75,7 @@ def _normalize_sequence(input, rank):
     rank by duplicating the input. If input is a sequence,
     check if its length is equal to the length of array.
     """
-    is_str = isinstance(input, string_types)
-    if hasattr(input, '__iter__') and not is_str:
+    if hasattr(input, "__iter__") and not isinstance(input, str):
         normalized = list(input)
         if len(normalized) != rank:
             err = "sequence argument must have length equal to input rank"
@@ -87,8 +85,17 @@ def _normalize_sequence(input, rank):
     return normalized
 
 
-def convolve1d(input, weights, axis=-1, output=None, mode='reflect', cval=0,
-               origin=0, xp=None, crop=False):
+def convolve1d(
+    input,
+    weights,
+    axis=-1,
+    output=None,
+    mode="reflect",
+    cval=0,
+    origin=0,
+    xp=None,
+    crop=False,
+):
     """Calculate a one-dimensional convolution along the given axis.
 
     The lines of the array along the given axis are convolved with the
@@ -118,8 +125,15 @@ def convolve1d(input, weights, axis=-1, output=None, mode='reflect', cval=0,
     """
     xp = cupy.get_array_module(input)
     if xp == np:
-        return ndi.convolve1d(input, weights, axis=axis, output=output,
-                              mode=mode, cval=cval, origin=origin)
+        return ndi.convolve1d(
+            input,
+            weights,
+            axis=axis,
+            output=output,
+            mode=mode,
+            cval=cval,
+            origin=origin,
+        )
     axis = _check_axis(axis, input.ndim)
 
     # input, weights, dtype_out = _fixup_dtypes(input, weights)
@@ -134,24 +148,32 @@ def convolve1d(input, weights, axis=-1, output=None, mode='reflect', cval=0,
     if origin < -w_len_half or origin > ((len(weights) - 1) // 2):
         raise ValueError(
             "Invalid origin; origin must satisfy "
-            "-(len(weights) // 2) <= origin <= (len(weights)-1) // 2")
-    if mode == 'reflect':
-        mode_kwarg = dict(mode='symmetric')
-    elif mode == 'mirror':
-        mode_kwarg = dict(mode='reflect')
-    elif mode == 'nearest':
-        mode_kwarg = dict(mode='constant')
-    elif mode == 'constant':
+            "-(len(weights) // 2) <= origin <= (len(weights)-1) // 2"
+        )
+    if mode == "reflect":
+        mode_kwarg = dict(mode="symmetric")
+    elif mode == "mirror":
+        mode_kwarg = dict(mode="reflect")
+    elif mode == "nearest":
+        mode_kwarg = dict(mode="constant")
+    elif mode == "constant":
         if cval == 0:
-            mode_kwarg = dict(mode='zero')
+            mode_kwarg = dict(mode="zero")
         else:
             raise NotImplementedError("mode 'constant' not implemented")
-    elif mode == 'wrap':
-        mode_kwarg = dict(mode='periodic')
+    elif mode == "wrap":
+        mode_kwarg = dict(mode="periodic")
     else:
         raise ValueError("unsupported mode: {}".format(mode))
-    tmp = _convolve1d(weights, input, axis=axis, origin=origin,
-                      center_crop=True, out=output, **mode_kwarg)
+    tmp = _convolve1d(
+        weights,
+        input,
+        axis=axis,
+        origin=origin,
+        center_crop=True,
+        out=output,
+        **mode_kwarg
+    )
     return tmp
     # out_slices = [slice(None), ] * input.ndim
     # nedge = w_len_half
@@ -159,9 +181,16 @@ def convolve1d(input, weights, axis=-1, output=None, mode='reflect', cval=0,
     # return tmp[tuple(out_slices)]
 
 
-
-def correlate1d(input, weights, axis=-1, output=None, mode='reflect', cval=0,
-                origin=0, xp=None):
+def correlate1d(
+    input,
+    weights,
+    axis=-1,
+    output=None,
+    mode="reflect",
+    cval=0,
+    origin=0,
+    xp=None,
+):
     """Calculate a one-dimensional correlation along the given axis.
 
     The lines of the array along the given axis are correlated with the
@@ -188,12 +217,21 @@ def correlate1d(input, weights, axis=-1, output=None, mode='reflect', cval=0,
     origin = -origin
     if not len(weights) & 1:
         origin -= 1
-    return convolve1d(input, weights, axis=axis, output=output, mode=mode,
-                      cval=cval, origin=origin, xp=xp)
+    return convolve1d(
+        input,
+        weights,
+        axis=axis,
+        output=output,
+        mode=mode,
+        cval=cval,
+        origin=origin,
+        xp=xp,
+    )
 
 
-def uniform_filter1d(input, size, axis=-1, output=None,
-                     mode="reflect", cval=0.0, origin=0):
+def uniform_filter1d(
+    input, size, axis=-1, output=None, mode="reflect", cval=0.0, origin=0
+):
     """Calculate a one-dimensional uniform filter along the given axis.
 
     The lines of the array along the given axis are filtered with a
@@ -220,18 +258,19 @@ def uniform_filter1d(input, size, axis=-1, output=None,
     input = xp.asarray(input)
     # axis = _check_axis(axis, input.ndim)
     if size < 1:
-        raise RuntimeError('incorrect filter size')
+        raise RuntimeError("incorrect filter size")
     # output = _get_output(output, input)  # TODO: add output support
     if (size // 2 + origin < 0) or (size // 2 + origin >= size):
-        raise ValueError('invalid origin')
-    weights = xp.full((size, ), 1 / size,
-                      dtype=np.result_type(input.real.dtype, np.float32))
-    return convolve1d(input, weights, axis, output, mode, cval, origin,
-                      xp=xp)
+        raise ValueError("invalid origin")
+    weights = xp.full(
+        (size,), 1 / size, dtype=np.result_type(input.real.dtype, np.float32)
+    )
+    return convolve1d(input, weights, axis, output, mode, cval, origin, xp=xp)
 
 
-def uniform_filter(input, size=3, output=None, mode="reflect",
-                   cval=0.0, origin=0):
+def uniform_filter(
+    input, size=3, output=None, mode="reflect", cval=0.0, origin=0
+):
     """Multi-dimensional uniform filter.
 
     Parameters
@@ -286,8 +325,11 @@ def uniform_filter(input, size=3, output=None, mode="reflect",
     origins = _normalize_sequence(origin, input.ndim)
     modes = _normalize_sequence(mode, input.ndim)
     axes = list(range(input.ndim))
-    axes = [(axes[ii], sizes[ii], origins[ii], modes[ii])
-            for ii in range(len(axes)) if sizes[ii] > 1]
+    axes = [
+        (axes[ii], sizes[ii], origins[ii], modes[ii])
+        for ii in range(len(axes))
+        if sizes[ii] > 1
+    ]
     if len(axes) > 0:
 
         # TODO
@@ -297,8 +339,9 @@ def uniform_filter(input, size=3, output=None, mode="reflect",
         #     input = output
 
         for axis, size, origin, mode in axes:
-            input = uniform_filter1d(input, int(size), axis, output, mode,
-                                     cval, origin)
+            input = uniform_filter1d(
+                input, int(size), axis, output, mode, cval, origin
+            )
         output = input
     else:
         # output[...] = input[...]
@@ -312,10 +355,10 @@ def convolve_separable(x, w, xp=None, **kwargs):
     currently a single 1d filter, w, is applied on all axes.
     w can also be a list of filters (equal in length to the number of axes)
     """
-    axes = kwargs.pop('axes', range(x.ndim))
+    axes = kwargs.pop("axes", range(x.ndim))
     xp = cupy.get_array_module(x)
     if isinstance(w, xp.ndarray):
-        w = [w, ] * len(axes)
+        w = [w] * len(axes)
     elif len(w) != len(axes):
         raise ValueError("user should supply one filter per axis")
 
@@ -325,8 +368,9 @@ def convolve_separable(x, w, xp=None, **kwargs):
                 if not np.iscomplexobj(w0):
                     w0 = w0.astype(np.result_type(np.float32, x.dtype))
                 tmp = ndi.convolve1d(x.real, w0.real, axis=ax, **kwargs)
-                x = tmp + 1j * ndi.convolve1d(x.imag, w0.real, axis=ax,
-                                              **kwargs)
+                x = tmp + 1j * ndi.convolve1d(
+                    x.imag, w0.real, axis=ax, **kwargs
+                )
             else:
                 x = ndi.convolve1d(x, w0, axis=ax, **kwargs)
         else:
@@ -337,7 +381,9 @@ def convolve_separable(x, w, xp=None, **kwargs):
 """
 equivalent of numpy.convolve
 """
-def convolve(a, v, mode='full'):
+
+
+def convolve(a, v, mode="full"):
     a = cupy.array(a, copy=False, ndmin=1)
     v = cupy.array(v, copy=False, ndmin=1)
 
@@ -346,7 +392,7 @@ def convolve(a, v, mode='full'):
     a = a.astype(output_dtype, copy=False)
     v = v.astype(output_dtype, copy=False)
 
-    if (len(v) > len(a)):
+    if len(v) > len(a):
         a, v = v, a
     if len(a) == 0:
         raise ValueError("a connot be empty")
@@ -355,9 +401,9 @@ def convolve(a, v, mode='full'):
     if a.ndim != v.ndim != 1:
         raise ValueError("convolve only supports 1D arrays")
     origin = 0
-    if mode == 'full':
+    if mode == "full":
         crop = False
-    elif mode in ['same', 'valid']:
+    elif mode in ["same", "valid"]:
         crop = True
         if len(v) > 2 and len(v) % 2 == 0:
             origin = -1
@@ -365,10 +411,11 @@ def convolve(a, v, mode='full'):
         raise ValueError("Unknown mode: {}".format(mode))
 
     # Note _convolve1d always computes in floating point
-    out = _convolve1d(v, a, axis=0, origin=origin, center_crop=crop,
-                      mode='zero')
+    out = _convolve1d(
+        v, a, axis=0, origin=origin, center_crop=crop, mode="zero"
+    )
 
-    if mode == 'valid':
+    if mode == "valid":
         sl_start = len(v) // 2
         sl_end = sl_start + len(a) - len(v) + 1
         out = out[sl_start:sl_end]
@@ -378,7 +425,7 @@ def convolve(a, v, mode='full'):
     return out
 
 
-def correlate(a, v, mode='valid'):
+def correlate(a, v, mode="valid"):
     v = v[::-1]
     if cupy.iscomplexobj(v):
         cupy.conj(v)
