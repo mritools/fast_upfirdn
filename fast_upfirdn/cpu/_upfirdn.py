@@ -33,9 +33,9 @@
 
 import numpy as np
 
-from ._upfirdn_apply import _output_len, _apply
+from ._upfirdn_apply import _output_len, _apply, mode_enum
 
-__all__ = ['upfirdn', '_output_len']
+__all__ = ["upfirdn", "_output_len"]
 
 
 def _pad_h(h, up):
@@ -53,9 +53,15 @@ def _pad_h(h, up):
     """
     h_padlen = len(h) + (-len(h) % up)
     h_full = np.zeros(h_padlen, h.dtype)
-    h_full[:len(h)] = h
+    h_full[: len(h)] = h
     h_full = h_full.reshape(-1, up).T[:, ::-1].ravel()
     return h_full
+
+
+def _check_mode(mode, len_x, len_h):
+    mode = mode.lower()
+    enum = mode_enum(mode)
+    return enum
 
 
 class _UpFIRDn(object):
@@ -63,18 +69,18 @@ class _UpFIRDn(object):
         """Helper for resampling"""
         h = np.asarray(h)
         if h.ndim != 1 or h.size == 0:
-            raise ValueError('h must be 1D with non-zero length')
+            raise ValueError("h must be 1D with non-zero length")
         self._output_type = np.result_type(h.dtype, x_dtype, np.float32)
         h = np.asarray(h, self._output_type)
         self._up = int(up)
         self._down = int(down)
         if self._up < 1 or self._down < 1:
-            raise ValueError('Both up and down must be >= 1')
+            raise ValueError("Both up and down must be >= 1")
         # This both transposes, and "flips" each phase for filtering
         self._h_trans_flip = _pad_h(h, self._up)
         self._h_trans_flip = np.ascontiguousarray(self._h_trans_flip)
 
-    def apply_filter(self, x, axis=-1):
+    def apply_filter(self, x, axis=-1, mode="zero", cval=0):
         """Apply the prepared filter to the specified axis of a nD signal x"""
         output_len = _output_len(len(self._h_trans_flip), x.shape[axis],
                                  self._up, self._down)
@@ -84,11 +90,11 @@ class _UpFIRDn(object):
         axis = axis % x.ndim
         _apply(np.asarray(x, self._output_type),
                self._h_trans_flip, out,
-               self._up, self._down, axis)
+               self._up, self._down, axis, mode_enum, cval)
         return out
 
 
-def upfirdn(h, x, up=1, down=1, axis=-1):
+def upfirdn(h, x, up=1, down=1, axis=-1, mode="zero", cval=0):
     """Upsample, FIR filter, and downsample
 
     Parameters
@@ -180,4 +186,4 @@ def upfirdn(h, x, up=1, down=1, axis=-1):
     x = np.asarray(x)
     ufd = _UpFIRDn(h, x.dtype, up, down)
     # This is equivalent to (but faster than) using np.apply_along_axis
-    return ufd.apply_filter(x, axis)
+    return ufd.apply_filter(x, axis, mode=mode, cval=cval)
