@@ -277,6 +277,7 @@ cdef int _apply_axis_inner(DTYPE_t* data, ArrayInfo data_info,
     cdef bint make_temp_data, make_temp_output
     cdef DTYPE_t* temp_data = NULL
     cdef DTYPE_t* temp_output = NULL
+    cdef size_t memcpy_size_output
 
     if data_info.ndim != output_info.ndim:
         return 1
