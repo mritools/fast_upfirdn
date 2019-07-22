@@ -227,7 +227,7 @@ cdef DTYPE_t _extend_right(DTYPE_t *x, Py_ssize_t idx, Py_ssize_t len_x,
 
 def _apply(np.ndarray data, DTYPE_t [::1] h_trans_flip, np.ndarray out,
            np.intp_t up, np.intp_t down, np.intp_t axis, np.intp_t mode,
-           DTYPE_t cval):
+           DTYPE_t cval, np.intp_t origin, bint crop):
     cdef ArrayInfo data_info, output_info
     cdef np.intp_t len_h = h_trans_flip.size
     cdef DTYPE_t *data_ptr
@@ -251,7 +251,8 @@ def _apply(np.ndarray data, DTYPE_t [::1] h_trans_flip, np.ndarray out,
         retval = _apply_axis_inner(data_ptr, data_info,
                                    filter_ptr, len_h,
                                    out_ptr, output_info,
-                                   up, down, axis, <MODE>mode, cval)
+                                   up, down, axis, <MODE>mode, cval, origin,
+                                   crop)
     if retval == 1:
         raise ValueError("failure in _apply_axis_inner: data and output arrays"
                          " must have the same number of dimensions.")
@@ -271,7 +272,8 @@ cdef int _apply_axis_inner(DTYPE_t* data, ArrayInfo data_info,
                            DTYPE_t* h_trans_flip, np.intp_t len_h,
                            DTYPE_t* output, ArrayInfo output_info,
                            np.intp_t up, np.intp_t down,
-                           np.intp_t axis, MODE mode, DTYPE_t cval) nogil:
+                           np.intp_t axis, MODE mode, DTYPE_t cval,
+                           np.intp_t origin, bint crop) nogil:
     cdef np.intp_t i
     cdef np.intp_t num_loops = 1
     cdef bint make_temp_data, make_temp_output
@@ -347,8 +349,14 @@ cdef int _apply_axis_inner(DTYPE_t* data, ArrayInfo data_info,
             output_row = <DTYPE_t *>((<char *>output) + output_offset)
 
         # call 1D upfirdn
-        _apply_impl(data_row, data_info.shape[axis],
-                    h_trans_flip, len_h, output_row, up, down, mode, cval)
+        if up == 1 and down == 1:
+            _apply_impl_up1_down1(data_row, data_info.shape[axis],
+                                  h_trans_flip, len_h, output_row, mode, cval,
+                                  origin, crop)
+        else:
+            _apply_impl(data_row, data_info.shape[axis],
+                        h_trans_flip, len_h, output_row, up, down, mode, cval,
+                        origin, crop)
 
         # Copy from temporary output if necessary
         if make_temp_output:
@@ -368,7 +376,8 @@ cdef int _apply_axis_inner(DTYPE_t* data, ArrayInfo data_info,
 cdef void _apply_impl(DTYPE_t *x, np.intp_t len_x, DTYPE_t *h_trans_flip,
                       np.intp_t len_h, DTYPE_t *out,
                       np.intp_t up, np.intp_t down, MODE mode,
-                      DTYPE_t cval) nogil:
+                      DTYPE_t cval,
+                      np.intp_t origin, bint crop) nogil:
     cdef np.intp_t h_per_phase = len_h / up
     cdef np.intp_t padded_len = len_x + h_per_phase - 1
     cdef np.intp_t x_idx = 0
@@ -379,6 +388,8 @@ cdef void _apply_impl(DTYPE_t *x, np.intp_t len_x, DTYPE_t *h_trans_flip,
     cdef DTYPE_t xval
     cdef bint zpad
 
+    if crop:
+        padded_len = len_x
 
     zpad = (mode == MODE_ZEROPAD) or (mode == MODE_CONSTANT_EDGE and cval == 0)
 
@@ -421,3 +432,62 @@ cdef void _apply_impl(DTYPE_t *x, np.intp_t len_x, DTYPE_t *h_trans_flip,
         t += down
         x_idx += t / up  # integer div
         t = t % up
+
+
+@cython.cdivision(True)  # faster modulo
+@cython.boundscheck(False)  # designed to stay within bounds
+@cython.wraparound(False)  # we don't use negative indexing
+cdef void _apply_impl_up1_down1(DTYPE_t *x, np.intp_t len_x,
+                                DTYPE_t *h_trans_flip,
+                                np.intp_t len_h, DTYPE_t *out,
+                                MODE mode, DTYPE_t cval,
+                                np.intp_t origin, bint crop) nogil:
+    cdef np.intp_t padded_len = len_x + len_h - 1
+    cdef np.intp_t x_idx = 0
+    cdef np.intp_t y_idx = 0
+    cdef np.intp_t h_idx = 0
+    cdef np.intp_t x_conv_idx = 0
+    cdef DTYPE_t xval
+    cdef bint zpad
+
+    if crop:
+        padded_len = len_x
+
+    zpad = (mode == MODE_ZEROPAD) or (mode == MODE_CONSTANT_EDGE and cval == 0)
+
+    x_idx = origin
+
+    while x_idx < len_x:
+        h_idx = 0
+        x_conv_idx = x_idx - len_h + 1
+        if x_conv_idx < 0:
+            if zpad:
+                h_idx -= x_conv_idx
+            else:
+                for x_conv_idx in range(x_conv_idx, 0):
+                    xval = _extend_left(x, x_conv_idx, len_x, mode, cval)
+                    out[y_idx] += xval * h_trans_flip[h_idx]
+                    h_idx += 1
+            x_conv_idx = 0
+        for x_conv_idx in range(x_conv_idx, x_idx + 1):
+            out[y_idx] += x[x_conv_idx] * h_trans_flip[h_idx]
+            h_idx += 1
+        # store and increment
+        x_idx += 1
+        y_idx += 1
+
+    # Use a second simplified loop to flush out the last bits
+    while x_idx < padded_len:
+        h_idx = 0
+        x_conv_idx = x_idx - len_h + 1
+        for x_conv_idx in range(x_conv_idx, x_idx + 1):
+            if x_conv_idx >= len_x:
+                xval = _extend_right(x, x_conv_idx, len_x, mode, cval)
+            elif x_conv_idx < 0:
+                xval = _extend_left(x, x_conv_idx, len_x, mode, cval)
+            else:
+                xval = x[x_conv_idx]
+            out[y_idx] += xval * h_trans_flip[h_idx]
+            h_idx += 1
+        x_idx += 1
+        y_idx += 1

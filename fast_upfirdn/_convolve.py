@@ -1,14 +1,14 @@
-import sys
-
 import numpy as np
 import scipy.ndimage as ndi
 
 import cupy
 
-from fast_upfirdn.cupy._upfirdn import (
-    _convolve1d,
-    _nearest_supported_float_dtype,
-)
+from fast_upfirdn._util import get_array_module, array_on_device, have_cupy
+if have_cupy:
+    from fast_upfirdn.cupy._upfirdn import (
+        _convolve1d as _convolve1d_gpu,
+        _nearest_supported_float_dtype,
+    )
 
 
 __all__ = [
@@ -172,7 +172,7 @@ def convolve1d(
         mode_kwarg = dict(mode="periodic")
     else:
         raise ValueError("unsupported mode: {}".format(mode))
-    tmp = _convolve1d(
+    tmp = _convolve1d_gpu(
         weights,
         input,
         axis=axis,
@@ -417,8 +417,8 @@ def convolve(a, v, mode="full"):
     else:
         raise ValueError("Unknown mode: {}".format(mode))
 
-    # Note _convolve1d always computes in floating point
-    out = _convolve1d(
+    # Note _convolve1d_gpu always computes in floating point
+    out = _convolve1d_gpu(
         v, a, axis=0, origin=origin, crop=crop, mode="zero"
     )
 
