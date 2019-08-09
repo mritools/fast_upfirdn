@@ -80,24 +80,28 @@ class _UpFIRDn(object):
         self._h_trans_flip = _pad_h(h, self._up)
         self._h_trans_flip = np.ascontiguousarray(self._h_trans_flip)
 
-    def apply_filter(self, x, axis=-1, mode="zero", cval=0, origin=0, crop=False):
+    def apply_filter(self, x, axis=-1, mode="zero", cval=0, offset=0, crop=False):
         """Apply the prepared filter to the specified axis of a nD signal x"""
         if axis < -x.ndim or axis >= x.ndim:
             raise ValueError("axis out of range")
         output_len = _output_len(len(self._h_trans_flip), x.shape[axis],
                                  self._up, self._down)
         output_shape = np.asarray(x.shape)
-        output_shape[axis] = output_len
+        if not crop:
+            output_shape[axis] = output_len
+        else:
+            # TODO: likely not correct for general down / up
+            output_shape[axis] = (x.shape[axis] * self._up) // self._down
         out = np.zeros(output_shape, dtype=self._output_type, order='C')
         axis = axis % x.ndim
         mode = _check_mode(mode)
         _apply(np.asarray(x, self._output_type),
                self._h_trans_flip, out,
-               self._up, self._down, axis, mode, cval, origin, crop)
+               self._up, self._down, axis, mode, cval, offset, crop)
         return out
 
 
-def upfirdn(h, x, up=1, down=1, axis=-1, mode="zero", cval=0, origin=0, crop=False):
+def upfirdn(h, x, up=1, down=1, axis=-1, mode="zero", cval=0, offset=0, crop=False):
     """Upsample, FIR filter, and downsample
 
     Parameters
@@ -114,6 +118,10 @@ def upfirdn(h, x, up=1, down=1, axis=-1, mode="zero", cval=0, origin=0, crop=Fal
         The axis of the input data array along which to apply the
         linear filter. The filter is applied to each subarray along
         this axis. Default is -1.
+    mode : str, optional
+        The signal extension mode to use.  TODO: details
+    cval : float, optional
+        The constant value to use when ``mode == 'constant'`.
 
     Returns
     -------
@@ -189,4 +197,4 @@ def upfirdn(h, x, up=1, down=1, axis=-1, mode="zero", cval=0, origin=0, crop=Fal
     x = np.asarray(x)
     ufd = _UpFIRDn(h, x.dtype, up, down)
     # This is equivalent to (but faster than) using np.apply_along_axis
-    return ufd.apply_filter(x, axis, mode=mode, cval=cval, origin=origin, crop=crop)
+    return ufd.apply_filter(x, axis, mode=mode, cval=cval, offset=offset, crop=crop)

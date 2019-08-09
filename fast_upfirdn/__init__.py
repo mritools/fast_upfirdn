@@ -1,2 +1,4 @@
-from ._upfirdn import upfirdn
-from ._convolve import *
+from ._numpy import *  # noqa
+from ._scipy_ndimage import *  # noqa
+from ._scipy_signal import *  # noqa
+

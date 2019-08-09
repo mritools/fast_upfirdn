@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from scipy.signal import upfirdn as upfirdn_scipy
+import fast_upfirdn
 from fast_upfirdn import upfirdn
 
 cupy = pytest.importorskip("cupy")

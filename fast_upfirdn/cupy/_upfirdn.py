@@ -72,7 +72,7 @@ __device__ complex<double> atomicAdd(complex<double>* address,
 }
 
 enum MODE {
-    MODE_ZEROPAD = 0,
+    MODE_CONSTANT = 0,
     MODE_SYMMETRIC = 1,
     MODE_CONSTANT_EDGE = 2,
     MODE_SMOOTH = 3,
@@ -164,9 +164,9 @@ DTYPE_DATA _extend_left(DTYPE_DATA *x, long long idx, long long len_x,
             }
         }
     case MODE_CONSTANT_EDGE:
+        return x[0];
+    case MODE_CONSTANT:
         return cval;
-    case MODE_ZEROPAD:
-        return 0.;
     default:
         return -1.;
     }
@@ -229,7 +229,7 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
                    (DTYPE_DATA)(idx - len_x) *
                    (x[len_x - 1] - x[len_x - 2]);
         case MODE_CONSTANT_EDGE:
-            return cval;
+            return x[len_x - 1];
         case MODE_ANTISYMMETRIC:
             if (idx < (2 * len_x))
             {
@@ -269,8 +269,8 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
                                  x[len_x - 1 - (idx - (len_x - 1))]);
                 }
             }
-        case MODE_ZEROPAD:
-            return 0.;
+        case MODE_CONSTANT:
+            return cval;
         default:
             return -1.;
     }
@@ -294,7 +294,7 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
                long long nbatch,
                long long _mode,
                DTYPE_DATA cval,
-               long long origin,
+               long long offset,
                long long crop)
 {
     __shared__ DTYPE_FILTER h_trans_flip_s[128];
@@ -318,20 +318,20 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
 
         long long y_idx = unraveled_idx - offset_out;
         long long h_idx = 0;
-        long long x_idx = y_idx + origin;
+        long long x_idx = y_idx + offset;
 
         DTYPE_OUT val = 0.0;
         DTYPE_OUT xval;
 
-        bool zpad = ((mode == MODE_ZEROPAD));
+        bool zpad = (mode == MODE_CONSTANT) && (abs(cval) == 0.0);
 
         if (crop)
         {
-            padded_len = len_x + len_h / 2;
-            x_idx += len_h / 2;
-        } else
+            padded_len = len_x + offset;
+        }
+        else
         {
-            padded_len = len_x + len_h - 1;
+            padded_len = len_x + len_h - 1 + offset;
         }
 
         if (x_idx < len_x)
@@ -408,7 +408,7 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
                   long long nbatch,
                   long long _mode,
                   DTYPE_DATA cval,
-                  long long origin,
+                  long long offset,
                   long long crop)
 {
     __shared__ DTYPE_FILTER h_trans_flip_s[128];
@@ -441,7 +441,7 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
                   long long nbatch,
                   long long _mode,
                   DTYPE_DATA cval,
-                  long long origin,
+                  long long offset,
                   long long crop)
 {
     long long x_conv_idx;
@@ -463,15 +463,15 @@ _upfirdn_template_part2 = r"""
         long long offset_out = batch_idx * out_axis_size;
 
         long long y_idx = unraveled_idx - offset_out;
-        long long t = ((y_idx + origin)*down) % up;
+        long long t = ((y_idx + offset)*down) % up;
         long long h_idx = t * h_per_phase;
-        long long x_idx = ((y_idx + origin)*down) / up;
+        long long x_idx = ((y_idx + offset)*down) / up;
 
         DTYPE_OUT val = 0.0;
         DTYPE_OUT xval;
         DTYPE_OUT hval = 0.0;
 
-        bool zpad = ((mode == MODE_ZEROPAD));
+        bool zpad = (mode == MODE_CONSTANT) && (abs(cval) == 0.0);
         if (crop)
             padded_len = len_x;
         else
@@ -590,6 +590,8 @@ def _get_mode_enum(mode):
     elif mode == "symmetric":
         return 1
     elif mode == "constant":
+        return 0
+    elif mode == "edge":
         return 2
     elif mode == "smooth":
         return 3
@@ -718,7 +720,7 @@ def _convolve1d(
     out=None,
     mode="zero",
     cval=0,
-    origin=0,
+    offset=0,
     crop=False,
 ):
     """
@@ -741,11 +743,6 @@ def _convolve1d(
     h_flip = h[::-1].copy()  # copy to avoid negative strides
 
     len_h = len(h_flip)
-    if len_h > 128:
-        raise ValueError(
-            "CUDA implementation currently assumes filter length is <= 128."
-        )
-
     if axis < -ndim or axis > ndim - 1:
         raise ValueError("axis out of range")
     axis = axis % x.ndim
@@ -800,7 +797,7 @@ def _convolve1d(
             nbatch,
             mode_enum,
             cval,
-            origin,
+            offset,
             crop,
         ),
     )
@@ -825,11 +822,10 @@ def upfirdn(
     out=None,
     mode="zero",
     cval=0,
-    offset=0,
     crop=False,
     take=None,
     h_size_orig=None,
-    origin=0,
+    offset=0,
 ):
     """
 
@@ -914,7 +910,7 @@ def upfirdn(
                 nbatch,
                 mode_enum,
                 cval,
-                origin,
+                offset,
                 False,  # crop not fully implemented in the kernel yet
             ),
         )
@@ -934,7 +930,7 @@ def upfirdn(
                 nbatch,
                 mode_enum,
                 cval,
-                origin,
+                offset,
                 False,  # crop not fully implemented in the kernel yet
             ),
         )
@@ -943,14 +939,14 @@ def upfirdn(
     if crop:
         # TODO: move into the kernel
         if h_size_orig is None:
-            offset = len_h - 1
+            y_offset = len_h - 1
         else:
-            offset = h_size_orig - 1
+            y_offset = h_size_orig - 1
         y_sl = [slice(None)] * y.ndim
         if take is None:
-            y_sl[-1] = slice(offset, None)
+            y_sl[-1] = slice(y_offset, None)
         else:
-            y_sl[-1] = slice(offset, offset + take)
+            y_sl[-1] = slice(y_offset, y_offset + take)
         y = y[tuple(y_sl)]
 
     if axis != ndim - 1:

@@ -53,3 +53,45 @@ def array_on_device(arr, xp):
             # copy back from GPU
             return arr.get()
     return xp.asarray(arr)
+
+
+# arr, weights = _fixup_dtypes(arr, weights)
+def _fixup_dtypes(data, h):
+    """Converts data and h to the nearest supported floating point type.
+
+    Parameters
+    ----------
+    data, h : ndarray
+        Input arrays.
+
+    Returns
+    -------
+    data, h : ndarray
+        Arrays converted to the nearest common dtype supported by the library.
+    dtype_out : np.dtype
+        The dtype.
+
+    """
+    dtype_data, _ = _nearest_supported_float_dtype(data.dtype)
+    if data.dtype != dtype_data:
+        data = data.astype(dtype_data)
+
+    # convert h to the same precision as data if there is a mismatch
+    if data.real.dtype != h.real.dtype:
+        if np.iscomplexobj(h):
+            h_dtype = np.result_type(data.real.dtype, np.complex64)
+        else:
+            h_dtype = np.result_type(data.real.dtype, np.float32)
+        h = h.astype(h_dtype)
+
+    dtype_filter, _ = _nearest_supported_float_dtype(h.dtype)
+    if h.dtype != dtype_filter:
+        h = h.astype(dtype_filter)
+
+    if np.iscomplexobj(h):
+        # output is complex if filter is complex
+        dtype_out = dtype_filter
+    else:
+        # for real filter, output dtype matches the data dtype
+        dtype_out = dtype_data
+    return data, h, dtype_out
