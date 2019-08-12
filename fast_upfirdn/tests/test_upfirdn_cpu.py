@@ -5,6 +5,8 @@ import pytest
 
 from scipy.signal import upfirdn as upfirdn_scipy
 from fast_upfirdn import upfirdn
+from fast_upfirdn.cpu._upfirdn_apply import _pad_test
+from fast_upfirdn.cpu._upfirdn import _upfirdn_modes
 
 cupy = pytest.importorskip("cupy")
 testing = pytest.importorskip("cupy.testing")
@@ -142,3 +144,23 @@ def test_general_up_and_down_cpu(up, down, nx, nh):
         upfirdn_scipy(h, x, up=up, down=down),
         upfirdn(h, x, up=up, down=down),
     )
+
+
+@pytest.mark.parametrize('mode', _upfirdn_modes)
+def test_extension_modes(mode):
+    """Test vs. manually computed results for modes not in numpy's pad."""
+    x = np.array([1, 2, 3, 1], dtype=float)
+    npre, npost = 6, 6
+    y = _pad_test(x, npre=npre, npost=npost, mode=mode)
+    if mode == 'antisymmetric':
+        y_expected = np.asarray(
+            [3, 1, -1, -3, -2, -1, 1, 2, 3, 1, -1, -3, -2, -1, 1, 2])
+    elif mode == 'antireflect':
+        y_expected = np.asarray(
+            [1, 2, 3, 1, -1, 0, 1, 2, 3, 1, -1, 0, 1, 2, 3, 1])
+    elif mode == 'smooth':
+        y_expected = np.asarray(
+            [-5, -4, -3, -2, -1, 0, 1, 2, 3, 1, -1, -3, -5, -7, -9, -11])
+    else:
+        y_expected = np.pad(x, (npre, npost), mode=mode)
+    testing.assert_allclose(y, y_expected)
