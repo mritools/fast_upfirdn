@@ -123,7 +123,8 @@ DTYPE_DATA _extend_left(DTYPE_DATA *x, long long idx, long long len_x,
                 return x[len_x - 2 - (idx - (len_x - 1))];
         }
     case MODE_PERIODIC:
-        return x[(len_x + idx) % len_x];
+        idx = (-idx - 1) % len_x;
+        return x[len_x - idx - 1];
     case MODE_SMOOTH:
         return x[0] + (DTYPE_DATA)idx * (x[1] - x[0]);
     case MODE_ANTISYMMETRIC:
@@ -197,7 +198,7 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
                 }
                 else
                 {
-                    return x[len_x - (idx - len_x)];
+                    return x[len_x - 1 - (idx - len_x)];
                 }
             }
         }
@@ -222,11 +223,11 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
         }
         case MODE_PERIODIC:
         {
-            return x[(idx - len_x) % len_x];
+            return x[idx % len_x];
         }
         case MODE_SMOOTH:
             return x[len_x - 1] +
-                   (DTYPE_DATA)(idx - len_x) *
+                   (DTYPE_DATA)(idx - len_x + 1) *
                    (x[len_x - 1] - x[len_x - 2]);
         case MODE_CONSTANT_EDGE:
             return x[len_x - 1];
@@ -240,11 +241,11 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
                 idx = idx % (2 * len_x);
                 if (idx < len_x)
                 {
-                    return -x[idx];
+                    return x[idx];
                 }
                 else
                 {
-                    return x[len_x - (idx - len_x)];
+                    return -x[len_x - 1 - (idx - len_x)];
                 }
             }
         case MODE_ANTIREFLECT:
@@ -911,7 +912,7 @@ def upfirdn(
                 mode_enum,
                 cval,
                 offset,
-                False,  # crop not fully implemented in the kernel yet
+                int(crop),
             ),
         )
     else:
@@ -931,7 +932,7 @@ def upfirdn(
                 mode_enum,
                 cval,
                 offset,
-                False,  # crop not fully implemented in the kernel yet
+                int(crop),
             ),
         )
     y = y.reshape(out_shape, order="C")
