@@ -25,7 +25,6 @@ def upfirdn(
     xp=None,
     prepadded=False,
     out=None,
-    h_size_orig=None,
     mode="zero",
     cval=0,
     offset=0,
@@ -46,8 +45,6 @@ def upfirdn(
         If this is True, it is assumed that the internal computation
         ``h = _pad_h(h, up=up)`` has already been performed on ``h``.
     out : ndarray
-        TODO
-    h_size_orig : int, optional
         TODO
     mode : str, optional
         The signal extension mode used at the boundaries.
@@ -77,7 +74,6 @@ def upfirdn(
             h,
             x,
             prepadded=prepadded,
-            h_size_orig=h_size_orig,
             out=out,
             **upfirdn_kwargs,
         )

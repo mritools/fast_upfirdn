@@ -474,9 +474,9 @@ _upfirdn_template_part2 = r"""
 
         bool zpad = (mode == MODE_CONSTANT) && (abs(cval) == 0.0);
         if (crop)
-            padded_len = len_x;
+            padded_len = len_x + offset * down / up;
         else
-            padded_len = len_x + len_h - 1;
+            padded_len = len_x + len_h - 1 + offset * down / up;
 
         if (x_idx < len_x)
         {
@@ -825,7 +825,6 @@ def upfirdn(
     cval=0,
     crop=False,
     take=None,
-    h_size_orig=None,
     offset=0,
 ):
     """
@@ -866,7 +865,10 @@ def upfirdn(
     if axis != ndim - 1:
         x = x.swapaxes(axis, -1)
     out_shape = [s for s in x.shape]
-    out_len = _output_len(h_flip.size, x.shape[-1], up, down)
+    if crop:
+        out_len = int(np.ceil(x.shape[-1] * up / down))
+    else:
+        out_len = _output_len(h_flip.size, x.shape[-1], up, down)
     out_shape[-1] = out_len
 
     x = cupy.ascontiguousarray(x)
@@ -937,17 +939,13 @@ def upfirdn(
         )
     y = y.reshape(out_shape, order="C")
 
-    if crop:
+    if take is not None:
         # TODO: move into the kernel
-        if h_size_orig is None:
-            y_offset = len_h - 1
-        else:
-            y_offset = h_size_orig - 1
         y_sl = [slice(None)] * y.ndim
         if take is None:
-            y_sl[-1] = slice(y_offset, None)
+            y_sl[-1] = slice(None)
         else:
-            y_sl[-1] = slice(y_offset, y_offset + take)
+            y_sl[-1] = slice(take)
         y = y[tuple(y_sl)]
 
     if axis != ndim - 1:
