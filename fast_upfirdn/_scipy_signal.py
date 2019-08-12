@@ -86,7 +86,6 @@ def upfirdn(
             raise ValueError("prepadded not supported on the CPU")
         if out is not None:
             raise ValueError("preallocated out array not supported on the CPU")
-        upfirdn_kwargs.pop('take')
         y = upfirdn_cpu(
             h,
             x,
