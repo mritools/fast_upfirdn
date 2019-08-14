@@ -5,6 +5,7 @@ __pycache__/
 
 # C extensions
 *.so
+fast_upfirdn/cpu/*.c
 
 # Distribution / packaging
 .Python
