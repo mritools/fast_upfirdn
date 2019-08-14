@@ -3,10 +3,10 @@
 """
 import numpy as np
 
-import cupy
 
 from fast_upfirdn._util import get_array_module, have_cupy
 if have_cupy:
+    import cupy
     from fast_upfirdn.cupy._upfirdn import (
         _convolve1d as _convolve1d_gpu,
         _nearest_supported_float_dtype,

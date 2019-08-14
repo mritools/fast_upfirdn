@@ -612,6 +612,8 @@ def _get_mode_enum(mode):
 def _get_upfirdn_kernel_inner(
     up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h_size
 ):
+    from cupy.cuda import nvrtc
+    
     func_name = "_apply_batch"
 
     # crude template-like functionality via string replacement
@@ -626,7 +628,7 @@ def _get_upfirdn_kernel_inner(
     code = code.replace("DTYPE_FILTER", c_dtype_filter)
     code = code.replace("DTYPE_OUT", c_dtype_out)
 
-    if cupy.cuda.nvrtc.getVersion() < (9, 2):
+    if nvrtc.getVersion() < (9, 2):
         # __shared__ complex<T> doesn't work on older CUDA compilers
 
         """ From the CUDA 9.2 release notes:

@@ -2,10 +2,9 @@ import numpy as np
 import scipy.ndimage as ndi
 from fast_upfirdn.cpu._upfirdn import upfirdn as upfirdn_cpu
 
-import cupy
-
 from fast_upfirdn._util import get_array_module, array_on_device, have_cupy
 if have_cupy:
+    import cupy
     from fast_upfirdn.cupy._upfirdn import (
         _convolve1d as _convolve1d_gpu,
         _nearest_supported_float_dtype,

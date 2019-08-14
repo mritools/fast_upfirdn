@@ -8,9 +8,6 @@ from fast_upfirdn import upfirdn
 from fast_upfirdn.cpu._upfirdn_apply import _pad_test
 from fast_upfirdn.cpu._upfirdn import _upfirdn_modes
 
-cupy = pytest.importorskip("cupy")
-testing = pytest.importorskip("cupy.testing")
-
 
 @pytest.mark.parametrize(
     "dtype_data, dtype_filter",
@@ -36,13 +33,13 @@ def test_dtype_combos_cpu(dtype_data, dtype_filter):
     h = np.arange(5, dtype=dtype_filter)
 
     # up=1 kernel case
-    testing.assert_allclose(
+    np.testing.assert_allclose(
         upfirdn_scipy(h, x, up=1, down=2),
         upfirdn(h, x, up=1, down=2)
     )
 
     # down=1 kernel case
-    testing.assert_allclose(
+    np.testing.assert_allclose(
         upfirdn_scipy(h, x, up=2, down=1),
         upfirdn(h, x, up=2, down=1)
     )
@@ -57,47 +54,14 @@ def test_input_and_filter_sizes_cpu(nh, nx):
     h = np.arange(1, nh + 1, dtype=dtype_filter)
 
     # up=1 kernel case
-    testing.assert_allclose(
+    np.testing.assert_allclose(
         upfirdn_scipy(h, x, up=1, down=2), upfirdn(h, x, up=1, down=2)
     )
 
     # down=1 kernel case
-    testing.assert_allclose(
+    np.testing.assert_allclose(
         upfirdn_scipy(h, x, up=2, down=1), upfirdn(h, x, up=2, down=1)
     )
-
-
-# @pytest.mark.parametrize("down", [1, 2, 3, 4, 5, 6, 7, 8])
-# def test_down(down):
-#     dtype_data = dtype_filter = np.float32
-#     nx = 16
-#     nh = 4
-#     x = cupy.arange(nx, dtype=dtype_data)
-#     x_cpu = x.get()
-#     h_cpu = np.arange(1, nh + 1, dtype=dtype_filter)
-#     h = cupy.asarray(h_cpu)
-
-#     # up=1 kernel case
-#     testing.assert_allclose(
-#         upfirdn_scipy(h_cpu, x_cpu, up=1, down=down),
-#         upfirdn(h, x, up=1, down=down),
-#     )
-
-
-# @pytest.mark.parametrize("up", [1, 2, 3, 4, 5, 6, 7, 8])
-# def test_up(up):
-#     dtype_data = dtype_filter = np.float32
-#     nx = 16
-#     nh = 4
-#     x = cupy.arange(nx, dtype=dtype_data)
-#     x_cpu = x.get()
-#     h_cpu = np.arange(1, nh + 1, dtype=dtype_filter)
-#     h = cupy.asarray(h_cpu)
-
-#     # up=1 kernel case
-#     testing.assert_allclose(
-#         upfirdn_scipy(h_cpu, x_cpu, up=up, down=1), upfirdn(h, x, up=up, down=1)
-#     )
 
 
 @pytest.mark.parametrize(
@@ -116,13 +80,13 @@ def test_axis_and_order_cpu(shape, axis, order):
     ndim = len(shape)
     if axis >= -ndim and axis < ndim:
         # up=1 case
-        testing.assert_allclose(
+        np.testing.assert_allclose(
             upfirdn_scipy(h, x, up=1, down=2, axis=axis),
             upfirdn(h, x, up=1, down=2, axis=axis),
         )
 
         # down=1 case
-        testing.assert_allclose(
+        np.testing.assert_allclose(
             upfirdn_scipy(h, x, up=2, down=1, axis=axis),
             upfirdn(h, x, up=2, down=1, axis=axis),
         )
@@ -140,7 +104,7 @@ def test_general_up_and_down_cpu(up, down, nx, nh):
     x = np.arange(nx, dtype=dtype_data)
     h = np.arange(1, nh + 1, dtype=dtype_filter)
 
-    testing.assert_allclose(
+    np.testing.assert_allclose(
         upfirdn_scipy(h, x, up=up, down=down),
         upfirdn(h, x, up=up, down=down),
     )
@@ -163,4 +127,4 @@ def test_extension_modes(mode):
             [-5, -4, -3, -2, -1, 0, 1, 2, 3, 1, -1, -3, -5, -7, -9, -11])
     else:
         y_expected = np.pad(x, (npre, npost), mode=mode)
-    testing.assert_allclose(y, y_expected)
+    np.testing.assert_allclose(y, y_expected)
