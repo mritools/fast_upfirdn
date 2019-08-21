@@ -596,7 +596,7 @@ def _get_mode_enum(mode):
         return 2
     elif mode == "smooth":
         return 3
-    elif mode == "periodic":
+    elif mode == "wrap":
         return 4
     elif mode == "reflect":
         return 5
@@ -613,7 +613,7 @@ def _get_upfirdn_kernel_inner(
     up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h_size
 ):
     from cupy.cuda import nvrtc
-    
+
     func_name = "_apply_batch"
 
     # crude template-like functionality via string replacement
@@ -947,7 +947,10 @@ def upfirdn(
         if take is None:
             y_sl[-1] = slice(None)
         else:
-            y_sl[-1] = slice(take)
+            if isinstance(take, slice):
+                y_sl[-1] = take
+            else:
+                y_sl[-1] = slice(take)
         y = y[tuple(y_sl)]
 
     if axis != ndim - 1:

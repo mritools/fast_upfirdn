@@ -108,7 +108,10 @@ class _UpFIRDn(object):
         if take is not None:
             # crop to desired size
             out_sl = [slice(None)] * out.ndim
-            out_sl[axis] = slice(take)
+            if isinstance(take, slice):
+                out_sl[axis] = take
+            else:
+                out_sl[axis] = slice(take)
             out = out[tuple(out_sl)]
         return out
 
