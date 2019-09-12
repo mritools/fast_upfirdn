@@ -4,7 +4,8 @@ setup = """
 import cupy
 import numpy as np
 from scipy.signal import upfirdn as upfirdn_scipy
-from fast_upfirdn import upfirdn
+from fast_upfirdn import upfirdn, convolve1d
+from scipy import ndimage as ndi
 
 d = cupy.cuda.device.Device()
 order = 'C'
@@ -14,7 +15,7 @@ up = 1
 dtype_data = dtype_filter = np.float32
 size = int(np.prod(shape))
 x_cpu = np.arange(size, dtype=dtype_data).reshape(shape, order=order)
-h_cpu = np.arange(3, dtype=dtype_filter)
+h_cpu = np.arange(7, dtype=dtype_filter)
 x = cupy.asarray(x_cpu, order=order)
 h = cupy.asarray(h_cpu)
 """
@@ -26,6 +27,25 @@ timeit("upfirdn(h, x, up=up, down=down, axis=0)", setup=setup, number=1)
 timeit("upfirdn(h, x, up=up, down=down, axis=-1)", setup=setup, number=1)
 
 nreps = 100
+
+
+t_gpu_cont = timeit("ndi.convolve1d(x_cpu, h_cpu, axis=-1); d.synchronize()",
+                    setup=setup, number=nreps) / nreps
+print("Duration convolve1d (CPU, contiguous axis) = {} ms".format(1000 * t_gpu_cont))
+
+t_gpu_noncont = timeit("ndi.convolve1d(x_cpu, h_cpu, axis=0); d.synchronize()",
+                       setup=setup, number=nreps) / nreps
+print("Duration convolve1d (CPU, non-contiguous axis) = {} ms".format(1000 * t_gpu_noncont))
+
+t_gpu_cont = timeit("convolve1d(x, h, axis=-1); d.synchronize()",
+                    setup=setup, number=nreps) / nreps
+print("Duration convolve1d (GPU, contiguous axis) = {} ms".format(1000 * t_gpu_cont))
+
+t_gpu_noncont = timeit("convolve1d(x, h, axis=0); d.synchronize()",
+                       setup=setup, number=nreps) / nreps
+print("Duration convolve1d (GPU, non-contiguous axis) = {} ms".format(1000 * t_gpu_noncont))
+
+
 t_cpu_cont = timeit("upfirdn_scipy(h_cpu, x_cpu, up=up, down=down, axis=-1)",
                     setup=setup, number=nreps) / nreps
 print("Duration (CPU, contiguous axis) = {} ms".format(1000 * t_cpu_cont))
