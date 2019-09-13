@@ -98,6 +98,8 @@ cpdef MODE mode_enum(mode):
         return MODE_SMOOTH
     elif mode == 'wrap':
         return MODE_PERIODIC
+    elif mode == 'periodic':
+        return MODE_PERIODIC
     elif mode == 'reflect':
         return MODE_REFLECT
     elif mode == 'antisymmetric':

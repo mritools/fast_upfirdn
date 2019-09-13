@@ -598,6 +598,8 @@ def _get_mode_enum(mode):
         return 3
     elif mode == "wrap":
         return 4
+    elif mode == "periodic":
+        return 4
     elif mode == "reflect":
         return 5
     elif mode == "antisymmetric":
