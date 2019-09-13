@@ -4,6 +4,7 @@ import numpy as np
 
 import cupy
 from cupy.util import memoize
+from fast_upfirdn.cpu._upfirdn_apply import mode_enum as _get_mode_enum
 
 
 try:
@@ -571,6 +572,7 @@ c_dtypes = {
 }
 
 
+@memoize()
 def _nearest_supported_float_dtype(dtype):
     if dtype.char in ["f", "d", "F", "D"]:
         return dtype, c_dtypes.get(dtype.char)
@@ -578,36 +580,10 @@ def _nearest_supported_float_dtype(dtype):
     # determine nearest single or double precision floating point type
     dtype = np.result_type(dtype, np.float32)
     if dtype.char == "g":
-        dtype = np.float64
+        dtype = np.dtype(np.float64)
     elif dtype.char == "G":
-        dtype = np.complex128
+        dtype = np.dtype(np.complex128)
     return dtype, c_dtypes.get(dtype.char)
-
-
-def _get_mode_enum(mode):
-    mode = mode.lower()
-    if mode == "zero":
-        return 0
-    elif mode == "symmetric":
-        return 1
-    elif mode == "constant":
-        return 0
-    elif mode == "edge":
-        return 2
-    elif mode == "smooth":
-        return 3
-    elif mode == "wrap":
-        return 4
-    elif mode == "periodic":
-        return 4
-    elif mode == "reflect":
-        return 5
-    elif mode == "antisymmetric":
-        return 6
-    elif mode == "antireflect":
-        return 7
-    else:
-        raise ValueError("Unknown mode: {}".format(mode))
 
 
 @memoize(for_each_device=True)
