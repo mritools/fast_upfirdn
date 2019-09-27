@@ -13,6 +13,8 @@ aside from the following differences:
 4.) All functions have an ``xp`` argument that can be set to either the NumPy
     or CuPy module or None. If None, the array backend to use is determined
     based on the type of the input.
+5.) In-place operation via ``output`` is not currently supported for GPU
+    arrays.
 
 """
 import numpy as np
@@ -55,7 +57,7 @@ def _invalid_origin(origin, lenw):
 
 
 def _get_output(output, arr, shape=None, xp=np):
-    xp, on_gpu = get_array_module(arr)
+    xp, on_gpu = get_array_module(arr, xp)
     if on_gpu and isinstance(output, xp.ndarray):
         raise NotImplementedError("in-place operation not currently supported")
     if shape is None:
@@ -243,9 +245,6 @@ def convolve1d(
             return out[tuple(sl_out)]
     axis = _check_axis(axis, arr.ndim)
 
-    # arr, weights, dtype_out = _fixup_dtypes(arr, weights)
-    # if output is None:
-    #     output = cupy.zeros(arr.shape, dtype=dtype_out)
     if output is not None:
         raise NotImplementedError("in-place operation not implemented")
 
@@ -269,10 +268,6 @@ def convolve1d(
         **mode_kwargs,
     )
     return tmp
-    # out_slices = [slice(None), ] * arr.ndim
-    # nedge = w_len_half
-    # out_slices[axis] = slice(nedge, nedge + arr.shape[axis])
-    # return tmp[tuple(out_slices)]
 
 
 def correlate1d(
@@ -352,14 +347,6 @@ def uniform_filter(
     This version supports only ``np.float32``, ``np.float64``,
     ``np.complex64`` and ``np.complex128`` dtypes.
     """
-    # xp, _ = get_array_module(arr)
-    # arr = xp.asarray(arr)
-    # # output = _ni_support._get_output(output, arr)  # TODO
-    # dtype_arr = _nearest_supported_float_dtype(arr.dtype)
-    # if arr.dtype != dtype_arr:
-    #     arr = arr.astype(dtype_arr)
-    # if output is None:
-    #     output = cupy.zeros(arr.shape, dtype=dtype_arr)
     xp, _ = get_array_module(arr, xp)
     output = _get_output(output, arr, xp=xp)
     sizes = _normalize_sequence(size, arr.ndim)
@@ -373,7 +360,7 @@ def uniform_filter(
     ]
     if len(axes) > 0:
 
-        # TODO
+        # TODO: add output != None support
         # for axis, size, origin, mode in axes:
         #     uniform_filter1d(arr, int(size), axis, output, mode,
         #                      cval, origin)
@@ -479,7 +466,8 @@ def gaussian_filter(
             gaussian_filter1d(
                 arr, sigma, axis, order, output, mode, cval, truncate
             )
-            arr = output
+            # arr = output
+        output = arr  # TODO: support output argument
     else:
         output[...] = arr[...]
     return output
