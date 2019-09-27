@@ -19,7 +19,7 @@ if have_cupy:
 __all__ = ["convolve", "correlate"]
 
 
-def convolve(a, v, mode="full", xp=None):
+def convolve(a, v, mode="full", *, xp=None):
     """see numpy.convolve
 
     The main difference in functionality is that this version only operates
@@ -62,7 +62,7 @@ def convolve(a, v, mode="full", xp=None):
     return out[:size]
 
 
-def correlate(a, v, mode="valid", xp=None):
+def correlate(a, v, mode="valid", *, xp=None):
     """see numpy.correlate
 
     The main difference in functionality is that this version only operates

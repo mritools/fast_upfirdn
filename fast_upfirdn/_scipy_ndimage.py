@@ -185,6 +185,7 @@ def convolve1d(
     mode="reflect",
     cval=0,
     origin=0,
+    *,
     xp=None,
     crop=True,  # if False, will get a "full" convolution instead
     # crop=False operates like np.convolve with mode='full'
@@ -282,6 +283,7 @@ def correlate1d(
     mode="reflect",
     cval=0,
     origin=0,
+    *,
     xp=None,
 ):
     """Calculate a one-dimensional correlation along the given axis.
@@ -316,7 +318,8 @@ def correlate1d(
 
 
 def uniform_filter1d(
-    arr, size, axis=-1, output=None, mode="reflect", cval=0.0, origin=0
+    arr, size, axis=-1, output=None, mode="reflect", cval=0.0, origin=0, *,
+    xp=None
 ):
     """Calculate a one-dimensional uniform filter along the given axis.
 
@@ -325,7 +328,7 @@ def uniform_filter1d(
     This version supports only ``np.float32``, ``np.float64``,
     ``np.complex64`` and ``np.complex128`` dtypes.
     """
-    xp, _ = get_array_module(arr)
+    xp, _ = get_array_module(arr, xp)
     arr = xp.asarray(arr)
     if size < 1:
         raise RuntimeError("incorrect filter size")
@@ -339,7 +342,8 @@ def uniform_filter1d(
 
 
 def uniform_filter(
-    arr, size=3, output=None, mode="reflect", cval=0.0, origin=0
+    arr, size=3, output=None, mode="reflect", cval=0.0, origin=0, *,
+    xp=None
 ):
     """Multi-dimensional uniform filter.
 
@@ -356,7 +360,7 @@ def uniform_filter(
     #     arr = arr.astype(dtype_arr)
     # if output is None:
     #     output = cupy.zeros(arr.shape, dtype=dtype_arr)
-    xp, _ = get_array_module(arr)
+    xp, _ = get_array_module(arr, xp)
     output = _get_output(output, arr, xp=xp)
     sizes = _normalize_sequence(size, arr.ndim)
     origins = _normalize_sequence(origin, arr.ndim)
@@ -385,7 +389,7 @@ def uniform_filter(
     return output
 
 
-def convolve_separable(x, w, xp=None, **kwargs):
+def convolve_separable(x, w, *, xp=None, **kwargs):
     """n-dimensional convolution via separable application of convolve1d
 
     currently a single 1d filter, w, is applied on all axes.
@@ -425,6 +429,8 @@ def gaussian_filter1d(
     mode="reflect",
     cval=0.0,
     truncate=4.0,
+    *,
+    xp=None,
 ):
     """One-dimensional Gaussian filter.
 
@@ -434,7 +440,7 @@ def gaussian_filter1d(
     ``np.complex64`` and ``np.complex128`` dtypes.
 
     """
-    xp, _ = get_array_module(arr)
+    xp, _ = get_array_module(arr, xp)
     sd = float(sigma)
     # make the radius of the filter equal to truncate standard deviations
     lw = int(truncate * sd + 0.5)
@@ -445,7 +451,8 @@ def gaussian_filter1d(
 
 
 def gaussian_filter(
-    arr, sigma, order=0, output=None, mode="reflect", cval=0.0, truncate=4.0
+    arr, sigma, order=0, output=None, mode="reflect", cval=0.0, truncate=4.0,
+    *, xp=None
 ):
     """Multidimensional Gaussian filter.
 
@@ -455,7 +462,7 @@ def gaussian_filter(
     ``np.complex64`` and ``np.complex128`` dtypes.
 
     """
-    xp, on_gpu = get_array_module(arr)
+    xp, on_gpu = get_array_module(arr, xp)
     arr = xp.asarray(arr)
     output = _get_output(output, arr, xp=xp)
     orders = _normalize_sequence(order, arr.ndim)

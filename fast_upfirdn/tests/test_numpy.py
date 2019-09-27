@@ -1,3 +1,12 @@
+"""Implementation of ``convolve`` and ``correlate`` as in NumPy.
+
+Unlike in NumPy, all computations in this implementation are done in
+floating point. Specifically float32, float64, complex64 and complex128
+dtypes are supported. Inputs with a different dtype will be converted to
+the nearest floating point type.
+
+"""
+
 from itertools import product
 
 import numpy as np
@@ -18,7 +27,7 @@ if have_cupy:
     product(
         [np.float32, np.float64],
         [np.float32, np.float64],
-        [2, 3, 4, 5, 6, 7, 8],
+        [2, 3, 6, 7],
         ["full", "valid", "same"],
         ["correlate", "convolve"],
         array_modules,
@@ -45,9 +54,9 @@ def test_convolve_and_correlate(dtype_x, dtype_h, len_x, mode, function, xp):
 @pytest.mark.parametrize(
     "dtype_x, dtype_h, len_x, mode, function, xp",
     product(
+        [np.float32, np.complex64, np.float64, np.complex128],
         [np.float32, np.complex64],
-        [np.float32, np.complex64],
-        [2, 3, 4, 5, 6, 7, 8],
+        [2, 3, 6, 7],
         ["full", "valid", "same"],
         ["correlate", "convolve"],
         array_modules,
