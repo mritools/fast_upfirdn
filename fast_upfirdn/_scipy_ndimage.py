@@ -1,8 +1,29 @@
+"""Functions based on separable convolution found in scipy.ndimage
+
+These functions are intended to operate exactly like their SciPy counterparts
+aside from the following differences:
+
+1.) Computations are done in the nearest floating point precision (single or
+    double) for the input dtype.
+    (``scipy.ndimage`` does all convolutions in double precision)
+2.) Complex-valued inputs (complex64 or complex128) are supported.
+    (``scipy.ndimage`` does not support complex-valued inputs)
+3.) convolve1d currently has a ``crop`` kwarg. If set to False, a full
+    convolution instead of one truncated to the size of the input is given.
+4.) All functions have an ``xp`` argument that can be set to either the NumPy
+    or CuPy module or None. If None, the array backend to use is determined
+    based on the type of the input.
+
+"""
 import numpy as np
 import scipy.ndimage as ndi
 from fast_upfirdn.cpu._upfirdn import upfirdn as upfirdn_cpu
 
-from fast_upfirdn._util import get_array_module, array_on_device, have_cupy
+from fast_upfirdn._util import (
+    get_array_module,
+    have_cupy,
+    check_device)
+
 if have_cupy:
     import cupy
     from fast_upfirdn.cupy._upfirdn import (
@@ -31,6 +52,10 @@ def _check_axis(axis, rank):
     if axis < 0 or axis >= rank:
         raise ValueError("invalid axis")
     return axis
+
+
+def _invalid_origin(origin, lenw):
+    return (origin < -(lenw // 2)) or (origin > (lenw - 1) // 2)
 
 
 def _get_output(output, arr, shape=None, xp=np):
@@ -165,7 +190,7 @@ def convolve1d(
     cval=0,
     origin=0,
     xp=None,
-    crop=True,  # TODO: remove crop argument (not in the ndimage API)
+    crop=True,  # if False, will get a "full" convolution instead
     # crop=False operates like np.convolve with mode='full'
 ):
     """Calculate a one-dimensional convolution along the given axis.
@@ -175,7 +200,14 @@ def convolve1d(
     This version supports only ``np.float32``, ``np.float64``,
     ``np.complex64`` and ``np.complex128`` dtypes.
     """
+    if _invalid_origin(origin, len(weights)):
+        raise ValueError('Invalid origin; origin must satisfy '
+                         '-(len(weights) // 2) <= origin <= '
+                         '(len(weights)-1) // 2')
+
     xp, _ = get_array_module(arr)
+    arr = check_device(arr, xp)
+
     if xp == np:
         if crop:
             # ndi.convolve1d is faster than CPU-based upfirdn implementation
@@ -225,11 +257,6 @@ def convolve1d(
         if origin != 0:
             raise ValueError("uncropped case requires origin == 0")
         offset = 0
-    if offset < -w_len_half or origin > ((len(weights) - 1) // 2):
-        raise ValueError(
-            "Invalid origin; origin must satisfy "
-            "-(len(weights) // 2) <= origin <= (len(weights)-1) // 2"
-        )
 
     mode_kwargs = _get_ndimage_mode_kwargs(mode, cval)
 
@@ -267,6 +294,11 @@ def correlate1d(
     This version supports only ``np.float32``, ``np.float64``,
     ``np.complex64`` and ``np.complex128`` dtypes.
     """
+    if _invalid_origin(origin, len(weights)):
+        raise ValueError('Invalid origin; origin must satisfy '
+                         '-(len(weights) // 2) <= origin <= '
+                         '(len(weights)-1) // 2')
+
     weights = weights[::-1]
     origin = -origin
     if not len(weights) & 1:
@@ -295,7 +327,6 @@ def uniform_filter1d(
     """
     xp, _ = get_array_module(arr)
     arr = xp.asarray(arr)
-    # axis = _check_axis(axis, arr.ndim)
     if size < 1:
         raise RuntimeError("incorrect filter size")
     # output = _get_output(output, arr)  # TODO: add output support
@@ -379,7 +410,7 @@ def convolve_separable(x, w, xp=None, **kwargs):
             else:
                 x = ndi.convolve1d(x, w0, axis=ax, **kwargs)
         else:
-            #if "origin" not in kwargs:
+            # if "origin" not in kwargs:
             #    kwargs["origin"] = -(len(w) // 2)
             x = convolve1d(x, w0, axis=ax, xp=xp, **kwargs)
     return x

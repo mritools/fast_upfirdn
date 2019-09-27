@@ -1,10 +1,13 @@
 """Implementations of functions from the NumPy API via upfirdn.
 
 """
+from functools import partial
+
 import numpy as np
 
+from fast_upfirdn._scipy_signal import upfirdn
+from fast_upfirdn._util import get_array_module, have_cupy, check_device
 
-from fast_upfirdn._util import get_array_module, have_cupy
 if have_cupy:
     import cupy
     from fast_upfirdn.cupy._upfirdn import (
@@ -19,15 +22,18 @@ __all__ = [
 ]
 
 
-def convolve(a, v, mode='full'):
+def convolve(a, v, mode='full', xp=None):
     """see numpy.convolve
 
     The main difference in functionality is that this version only operates
     using np.float32, np.float64, np.complex64 and np.complex128.
     """
-    from fast_upfirdn import upfirdn
-    xp, on_gpu = get_array_module(a, xp=None)
+    xp, on_gpu = get_array_module(a, xp=xp)
     a, v = xp.array(a, copy=False, ndmin=1), xp.array(v, copy=False, ndmin=1)
+
+    # make sure both arrays are on the CPU when xp=numpy or GPU when xp=cupy
+    a, v = map(partial(check_device, xp=xp), [a, v])
+
     if len(a) < len(v):
         v, a = a, v
     if len(a) == 0:
@@ -70,13 +76,14 @@ def convolve(a, v, mode='full'):
     return out[:size]
 
 
-def correlate(a, v, mode="valid"):
+def correlate(a, v, mode="valid", xp=None):
     """see numpy.correlate
 
     The main difference in functionality is that this version only operates
     using np.float32, np.float64, np.complex64 and np.complex128.
     """
+    xp, on_gpu = get_array_module(a, xp=xp)
     v = v[::-1]
-    if cupy.iscomplexobj(v):
-        cupy.conj(v)
-    return convolve(a, v, mode=mode)
+    if xp.iscomplexobj(v):
+        v = xp.conj(v)
+    return convolve(a, v, mode=mode, xp=xp)

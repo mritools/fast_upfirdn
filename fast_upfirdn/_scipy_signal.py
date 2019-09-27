@@ -5,11 +5,15 @@ Currently this is just ``upfirdn`` and ``resample_poly``.
 Also defines ``upfirdn_out_len`` which is not part of the public scipy API.
 
 """
+from functools import partial
 import sys
 
 from fast_upfirdn.cpu import upfirdn as upfirdn_cpu
 from fast_upfirdn.cpu._upfirdn_apply import _output_len as upfirdn_out_len
-from fast_upfirdn._util import get_array_module, array_on_device, have_cupy
+from fast_upfirdn._util import (
+    get_array_module,
+    have_cupy,
+    check_device)
 
 if sys.version_info >= (3, 5):
     from math import gcd
@@ -70,7 +74,7 @@ def upfirdn(
     xp, on_gpu = get_array_module(x, xp)
 
     # make sure both arrays are on the CPU when xp=numpy or GPU when xp=cupy
-    x, h = [array_on_device(arr, xp) for arr in [x, h]]
+    x, h = map(partial(check_device, xp=xp), [x, h])
 
     upfirdn_kwargs = dict(up=up, down=down, axis=axis, mode=mode, cval=cval,
                           offset=offset, crop=int(crop), take=take)

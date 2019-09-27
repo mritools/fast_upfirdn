@@ -6,7 +6,11 @@ try:
 except ImportError:
     have_cupy = False
 
-__all__ = ['have_cupy', 'get_array_module', 'array_on_device']
+allow_device_transfers = False
+
+
+__all__ = ['allow_device_transfers', 'have_cupy', 'get_array_module',
+           'array_on_device', 'check_device']
 
 
 def get_array_module(arr, xp=None):
@@ -32,6 +36,32 @@ def get_array_module(arr, xp=None):
             return xp, (xp != np)
     else:
         return xp, (xp != np)
+
+
+def check_device(arr, xp, autoconvert=allow_device_transfers):
+    if autoconvert:
+        return array_on_device(arr, xp)
+    elif xp == np:
+        if isinstance(arr, np.ndarray):
+            return arr
+        elif (hasattr(arr, '__array_interface__') and not
+              (have_cupy and hasattr(arr, '__cuda_array_interface__'))):
+            return np.asarray(arr)
+        else:
+            raise ValueError(
+                "Expected a numpy.ndarray, got {}".format(type(arr))
+            )
+    elif have_cupy and xp == cupy:
+        if isinstance(arr, cupy.ndarray):
+            return arr
+        elif hasattr(arr, '__cuda_array_interface__'):
+            return cupy.asarray(arr)
+        else:
+            raise ValueError(
+                "Expected a cupy.ndarray, got {}".format(type(arr))
+            )
+    else:
+        raise ValueError("unsupported module: {}".format(xp))
 
 
 def array_on_device(arr, xp):

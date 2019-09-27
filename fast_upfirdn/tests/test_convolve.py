@@ -17,7 +17,7 @@ cupy = pytest.importorskip("cupy")
         ["reflect", "constant", "nearest", "mirror", "wrap"],  # mode
     ),
 )
-def test_convolve_separable(shape, filter_length, dtype, mode):
+def test_convolve_separable_cpu_vs_gpu(shape, filter_length, dtype, mode):
     if dtype in [np.float32, np.complex64]:
         atol = rtol = 1e-5
     else:
@@ -26,8 +26,11 @@ def test_convolve_separable(shape, filter_length, dtype, mode):
     if np.iscomplexobj(x):
         x = x + 1j * x[::-1]
     w = np.arange(1, 1 + filter_length).astype(x.real.dtype)
+
+    # on cpu
     y = convolve_separable(x, w)
 
+    # on gpu
     xg = cupy.asarray(x)
     wg = cupy.arange(1, 1 + filter_length)
     yg = convolve_separable(xg, wg)
