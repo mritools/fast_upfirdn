@@ -261,10 +261,10 @@ def resample_poly(
             x,
             up,
             down,
-            axis=0,
-            window=("kaiser", 5.0),
-            padtype="constant",
-            cval=None,
+            axis=axis,
+            window=window,
+            padtype=padtype,
+            cval=cval,
         )
 
     x = xp.asarray(x)
@@ -332,7 +332,7 @@ def resample_poly(
     if padtype == "constant":
         background_line = cval
     elif padtype in funcs:
-        background_line = [funcs[padtype](x, axis=axis), 0]
+        background_line = [funcs[padtype](x, axis=axis), xp.asarray(0)]
     elif padtype == "line":
         background_line = [
             x.take(0, axis),

@@ -1,3 +1,5 @@
+"""Miscellaneous utility functions."""
+
 import numpy as np
 
 try:
