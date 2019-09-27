@@ -38,8 +38,14 @@ from ._upfirdn_apply import _output_len, _apply, mode_enum
 __all__ = ["upfirdn", "_output_len"]
 
 _upfirdn_modes = [
-    'constant', 'wrap', 'edge', 'smooth', 'symmetric', 'reflect',
-    'antisymmetric', 'antireflect'
+    "constant",
+    "wrap",
+    "edge",
+    "smooth",
+    "symmetric",
+    "reflect",
+    "antisymmetric",
+    "antireflect",
 ]
 
 
@@ -85,26 +91,37 @@ class _UpFIRDn(object):
         self._h_trans_flip = _pad_h(h, self._up)
         self._h_trans_flip = np.ascontiguousarray(self._h_trans_flip)
 
-    def apply_filter(self, x, axis=-1, mode="zero", cval=0, offset=0, crop=False, take=None):
+    def apply_filter(
+        self, x, axis=-1, mode="zero", cval=0, offset=0, crop=False, take=None
+    ):
         """Apply the prepared filter to the specified axis of a nD signal x"""
         if axis < -x.ndim or axis >= x.ndim:
             raise ValueError("axis out of range")
         output_shape = np.asarray(x.shape)
         if crop:
             # only compute output over roughly the original signal extent
-            output_len = int(
-                np.ceil(x.shape[axis] * self._up / self._down))
+            output_len = int(np.ceil(x.shape[axis] * self._up / self._down))
         else:
-            output_len = _output_len(len(self._h_trans_flip), x.shape[axis],
-                                     self._up, self._down)
+            output_len = _output_len(
+                len(self._h_trans_flip), x.shape[axis], self._up, self._down
+            )
         output_shape[axis] = output_len
         output_shape = tuple(output_shape)
-        out = np.zeros(output_shape, dtype=self._output_type, order='C')
+        out = np.zeros(output_shape, dtype=self._output_type, order="C")
         axis = axis % x.ndim
         mode = _check_mode(mode)
-        _apply(np.asarray(x, self._output_type),
-               self._h_trans_flip, out,
-               self._up, self._down, axis, mode, cval, offset, crop)
+        _apply(
+            np.asarray(x, self._output_type),
+            self._h_trans_flip,
+            out,
+            self._up,
+            self._down,
+            axis,
+            mode,
+            cval,
+            offset,
+            crop,
+        )
         if take is not None:
             # crop to desired size
             out_sl = [slice(None)] * out.ndim
@@ -116,7 +133,18 @@ class _UpFIRDn(object):
         return out
 
 
-def upfirdn(h, x, up=1, down=1, axis=-1, mode="zero", cval=0, offset=0, crop=False, take=None):
+def upfirdn(
+    h,
+    x,
+    up=1,
+    down=1,
+    axis=-1,
+    mode="zero",
+    cval=0,
+    offset=0,
+    crop=False,
+    take=None,
+):
     """Upsample, FIR filter, and downsample
 
     Parameters
@@ -212,4 +240,6 @@ def upfirdn(h, x, up=1, down=1, axis=-1, mode="zero", cval=0, offset=0, crop=Fal
     x = np.asarray(x)
     ufd = _UpFIRDn(h, x.dtype, up, down)
     # This is equivalent to (but faster than) using np.apply_along_axis
-    return ufd.apply_filter(x, axis, mode=mode, cval=cval, offset=offset, crop=crop, take=take)
+    return ufd.apply_filter(
+        x, axis, mode=mode, cval=cval, offset=offset, crop=crop, take=take
+    )

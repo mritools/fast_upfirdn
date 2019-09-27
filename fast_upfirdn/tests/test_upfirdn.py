@@ -97,7 +97,8 @@ def test_up(up):
 
     # up=1 kernel case
     testing.assert_allclose(
-        upfirdn_scipy(h_cpu, x_cpu, up=up, down=1), upfirdn(h, x, up=up, down=1)
+        upfirdn_scipy(h_cpu, x_cpu, up=up, down=1),
+        upfirdn(h, x, up=up, down=1),
     )
 
 

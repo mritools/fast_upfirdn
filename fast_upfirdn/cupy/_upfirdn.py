@@ -550,16 +550,12 @@ _upfirdn_template_part2 = r"""
 
 # version where the filter, h, is copied into local shared memory
 _upfirdn_batch_template_shared_h = (
-    _include
-    + _upfirdn_part1_shared_h
-    + _upfirdn_template_part2
+    _include + _upfirdn_part1_shared_h + _upfirdn_template_part2
 )
 
 # version where the filter, h, is not copied into local shared memory
 _upfirdn_batch_template_nonshared_h = (
-    _include
-    + _upfirdn_part1_nonshared_h
-    + _upfirdn_template_part2
+    _include + _upfirdn_part1_nonshared_h + _upfirdn_template_part2
 )
 
 
@@ -599,9 +595,13 @@ def _get_upfirdn_kernel_inner(
         code = _convolved_batch_template.replace("DTYPE_DATA", c_dtype_data)
     else:
         if h_size <= 128:
-            code = _upfirdn_batch_template_shared_h.replace("DTYPE_DATA", c_dtype_data)
+            code = _upfirdn_batch_template_shared_h.replace(
+                "DTYPE_DATA", c_dtype_data
+            )
         else:
-            code = _upfirdn_batch_template_nonshared_h.replace("DTYPE_DATA", c_dtype_data)
+            code = _upfirdn_batch_template_nonshared_h.replace(
+                "DTYPE_DATA", c_dtype_data
+            )
 
     code = code.replace("DTYPE_FILTER", c_dtype_filter)
     code = code.replace("DTYPE_OUT", c_dtype_out)
@@ -652,7 +652,7 @@ def get_upfirdn_kernel(h, data, up, down):
 
     # memoized GPU kernels
     kern = _get_upfirdn_kernel_inner(
-        up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h.size,
+        up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h.size
     )
 
     return h, data, dtype_out, kern

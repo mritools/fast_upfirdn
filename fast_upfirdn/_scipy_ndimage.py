@@ -19,10 +19,7 @@ import numpy as np
 import scipy.ndimage as ndi
 from fast_upfirdn.cpu._upfirdn import upfirdn as upfirdn_cpu
 
-from fast_upfirdn._util import (
-    get_array_module,
-    have_cupy,
-    check_device)
+from fast_upfirdn._util import get_array_module, have_cupy, check_device
 
 if have_cupy:
     import cupy
@@ -40,7 +37,6 @@ __all__ = [
     "gaussian_filter",
     "uniform_filter1d",
     "uniform_filter",
-
     # not from SciPy API
     "convolve_separable",
 ]
@@ -82,10 +78,10 @@ def _gaussian_kernel1d(sigma, order, radius):
     Computes a 1D Gaussian convolution kernel.
     """
     if order < 0:
-        raise ValueError('order must be non-negative')
+        raise ValueError("order must be non-negative")
     exponent_range = np.arange(order + 1)
     sigma2 = sigma * sigma
-    x = np.arange(-radius, radius+1)
+    x = np.arange(-radius, radius + 1)
     phi_x = np.exp(-0.5 / sigma2 * x ** 2)
     phi_x = phi_x / phi_x.sum()
 
@@ -100,7 +96,7 @@ def _gaussian_kernel1d(sigma, order, radius):
         q = np.zeros(order + 1)
         q[0] = 1
         D = np.diag(exponent_range[1:], 1)  # D @ q(x) = q'(x)
-        P = np.diag(np.ones(order)/-sigma2, -1)  # P @ q(x) = q(x) * p'(x)
+        P = np.diag(np.ones(order) / -sigma2, -1)  # P @ q(x) = q(x) * p'(x)
         Q_deriv = D + P
         for _ in range(order):
             q = Q_deriv.dot(q)
@@ -201,9 +197,11 @@ def convolve1d(
     ``np.complex64`` and ``np.complex128`` dtypes.
     """
     if _invalid_origin(origin, len(weights)):
-        raise ValueError('Invalid origin; origin must satisfy '
-                         '-(len(weights) // 2) <= origin <= '
-                         '(len(weights)-1) // 2')
+        raise ValueError(
+            "Invalid origin; origin must satisfy "
+            "-(len(weights) // 2) <= origin <= "
+            "(len(weights)-1) // 2"
+        )
 
     xp, _ = get_array_module(arr)
     arr = check_device(arr, xp)
@@ -267,7 +265,7 @@ def convolve1d(
         offset=offset,
         crop=crop,
         out=output,
-        **mode_kwargs
+        **mode_kwargs,
     )
     return tmp
     # out_slices = [slice(None), ] * arr.ndim
@@ -295,9 +293,11 @@ def correlate1d(
     ``np.complex64`` and ``np.complex128`` dtypes.
     """
     if _invalid_origin(origin, len(weights)):
-        raise ValueError('Invalid origin; origin must satisfy '
-                         '-(len(weights) // 2) <= origin <= '
-                         '(len(weights)-1) // 2')
+        raise ValueError(
+            "Invalid origin; origin must satisfy "
+            "-(len(weights) // 2) <= origin <= "
+            "(len(weights)-1) // 2"
+        )
 
     weights = weights[::-1]
     origin = -origin
@@ -416,8 +416,16 @@ def convolve_separable(x, w, xp=None, **kwargs):
     return x
 
 
-def gaussian_filter1d(arr, sigma, axis=-1, order=0, output=None,
-                      mode="reflect", cval=0.0, truncate=4.0):
+def gaussian_filter1d(
+    arr,
+    sigma,
+    axis=-1,
+    order=0,
+    output=None,
+    mode="reflect",
+    cval=0.0,
+    truncate=4.0,
+):
     """One-dimensional Gaussian filter.
 
     See ``scipy.ndimage.gaussian_filter1d``
@@ -436,8 +444,9 @@ def gaussian_filter1d(arr, sigma, axis=-1, order=0, output=None,
     return correlate1d(arr, weights, axis, output, mode, cval, 0, xp=xp)
 
 
-def gaussian_filter(arr, sigma, order=0, output=None,
-                    mode="reflect", cval=0.0, truncate=4.0):
+def gaussian_filter(
+    arr, sigma, order=0, output=None, mode="reflect", cval=0.0, truncate=4.0
+):
     """Multidimensional Gaussian filter.
 
     See ``scipy.ndimage.gaussian_filter``
@@ -453,12 +462,16 @@ def gaussian_filter(arr, sigma, order=0, output=None,
     sigmas = _normalize_sequence(sigma, arr.ndim)
     modes = _normalize_sequence(mode, arr.ndim)
     axes = list(range(arr.ndim))
-    axes = [(axes[ii], sigmas[ii], orders[ii], modes[ii])
-            for ii in range(len(axes)) if sigmas[ii] > 1e-15]
+    axes = [
+        (axes[ii], sigmas[ii], orders[ii], modes[ii])
+        for ii in range(len(axes))
+        if sigmas[ii] > 1e-15
+    ]
     if len(axes) > 0:
         for axis, sigma, order, mode in axes:
-            gaussian_filter1d(arr, sigma, axis, order, output,
-                              mode, cval, truncate)
+            gaussian_filter1d(
+                arr, sigma, axis, order, output, mode, cval, truncate
+            )
             arr = output
     else:
         output[...] = arr[...]

@@ -16,13 +16,10 @@ if have_cupy:
     )
 
 
-__all__ = [
-    "convolve",
-    "correlate",
-]
+__all__ = ["convolve", "correlate"]
 
 
-def convolve(a, v, mode='full', xp=None):
+def convolve(a, v, mode="full", xp=None):
     """see numpy.convolve
 
     The main difference in functionality is that this version only operates
@@ -37,41 +34,30 @@ def convolve(a, v, mode='full', xp=None):
     if len(a) < len(v):
         v, a = a, v
     if len(a) == 0:
-        raise ValueError('a cannot be empty')
+        raise ValueError("a cannot be empty")
     if len(v) == 0:
-        raise ValueError('v cannot be empty')
-    if mode == 'full':
+        raise ValueError("v cannot be empty")
+    if mode == "full":
         offset = 0
         size = len(a) + len(v) - 1
         crop = False
-    elif mode == 'same':
+    elif mode == "same":
         offset = (len(v) - 1) // 2  # needed - 1 here to match NumPy
         size = len(a)
         crop = True
-    elif mode == 'valid':
+    elif mode == "valid":
         offset = len(v) - 1
         size = len(a) - len(v) + 1
         crop = True
     else:
         raise ValueError("unrecognized mode: {}".format(mode))
     if xp == np:
-        out = upfirdn(
-            v,
-            a,
-            offset=offset,
-            mode='constant',
-            cval=0,
-            crop=crop)
+        out = upfirdn(v, a, offset=offset, mode="constant", cval=0, crop=crop)
     else:
         # TODO: only need this special case because crop=True doesn't work the
         #       same for upfirdn.
         out = _convolve1d_gpu(
-            v,
-            a,
-            offset=offset,
-            mode='constant',
-            cval=0,
-            crop=crop
+            v, a, offset=offset, mode="constant", cval=0, crop=crop
         )
     return out[:size]
 

@@ -10,10 +10,7 @@ import sys
 
 from fast_upfirdn.cpu import upfirdn as upfirdn_cpu
 from fast_upfirdn.cpu._upfirdn_apply import _output_len as upfirdn_out_len
-from fast_upfirdn._util import (
-    get_array_module,
-    have_cupy,
-    check_device)
+from fast_upfirdn._util import get_array_module, have_cupy, check_device
 
 if sys.version_info >= (3, 5):
     from math import gcd
@@ -23,7 +20,7 @@ else:
 if have_cupy:
     from fast_upfirdn.cupy import upfirdn as upfirdn_cupy
 
-__all__ = ['upfirdn', 'upfirdn_out_len', 'resample_poly']
+__all__ = ["upfirdn", "upfirdn_out_len", "resample_poly"]
 
 
 def upfirdn(
@@ -76,27 +73,25 @@ def upfirdn(
     # make sure both arrays are on the CPU when xp=numpy or GPU when xp=cupy
     x, h = map(partial(check_device, xp=xp), [x, h])
 
-    upfirdn_kwargs = dict(up=up, down=down, axis=axis, mode=mode, cval=cval,
-                          offset=offset, crop=int(crop), take=take)
+    upfirdn_kwargs = dict(
+        up=up,
+        down=down,
+        axis=axis,
+        mode=mode,
+        cval=cval,
+        offset=offset,
+        crop=int(crop),
+        take=take,
+    )
 
     if on_gpu:
-        y = upfirdn_cupy(
-            h,
-            x,
-            prepadded=prepadded,
-            out=out,
-            **upfirdn_kwargs,
-        )
+        y = upfirdn_cupy(h, x, prepadded=prepadded, out=out, **upfirdn_kwargs)
     else:
         if prepadded:
             raise ValueError("prepadded not supported on the CPU")
         if out is not None:
             raise ValueError("preallocated out array not supported on the CPU")
-        y = upfirdn_cpu(
-            h,
-            x,
-            **upfirdn_kwargs,
-        )
+        y = upfirdn_cpu(h, x, **upfirdn_kwargs)
     return y
 
 
@@ -109,18 +104,27 @@ def _reshape_nd(x1d, ndim, axis):
     return x1d.reshape(shape)
 
 
-def _resample_poly_window(up, down, window=('kaiser', 5.0)):
+def _resample_poly_window(up, down, window=("kaiser", 5.0)):
     """Design a linear-phase low-pass FIR filter for resample_poly."""
     from scipy.signal import firwin
+
     max_rate = max(up, down)
-    f_c = 1. / max_rate  # cutoff of FIR filter (rel. to Nyquist)
+    f_c = 1.0 / max_rate  # cutoff of FIR filter (rel. to Nyquist)
     half_len = 10 * max_rate  # reasonable cutoff for our sinc-like function
     h = firwin(2 * half_len + 1, f_c, window=window)
     return h, half_len
 
 
-def resample_poly(x, up, down, axis=0, window=('kaiser', 5.0),
-                  padtype='constant', cval=None, xp=None):
+def resample_poly(
+    x,
+    up,
+    down,
+    axis=0,
+    window=("kaiser", 5.0),
+    padtype="constant",
+    cval=None,
+    xp=None,
+):
     """
     Resample `x` along the given axis using polyphase filtering.
 
@@ -252,8 +256,16 @@ def resample_poly(x, up, down, axis=0, window=('kaiser', 5.0),
 
     if not on_gpu:
         from scipy.signal import resample_poly
-        return resample_poly(x, up, down, axis=0, window=('kaiser', 5.0),
-                             padtype='constant', cval=None)
+
+        return resample_poly(
+            x,
+            up,
+            down,
+            axis=0,
+            window=("kaiser", 5.0),
+            padtype="constant",
+            cval=None,
+        )
 
     x = xp.asarray(x)
     if up != int(up):
@@ -263,9 +275,9 @@ def resample_poly(x, up, down, axis=0, window=('kaiser', 5.0),
     up = int(up)
     down = int(down)
     if up < 1 or down < 1:
-        raise ValueError('up and down must be >= 1')
-    if cval is not None and padtype != 'constant':
-        raise ValueError('cval has no effect when padtype is ', padtype)
+        raise ValueError("up and down must be >= 1")
+    if cval is not None and padtype != "constant":
+        raise ValueError("cval has no effect when padtype is ", padtype)
 
     # Determine our up and down factors
     # Use a rational approximation to save computation time on really long
@@ -282,7 +294,7 @@ def resample_poly(x, up, down, axis=0, window=('kaiser', 5.0),
     if isinstance(window, (list, xp.ndarray)):
         window = xp.array(window)  # use array to force a copy (we modify it)
         if window.ndim > 1:
-            raise ValueError('window must be 1-D')
+            raise ValueError("window must be 1-D")
         half_len = (window.size - 1) // 2
         h = window
     else:
@@ -292,55 +304,72 @@ def resample_poly(x, up, down, axis=0, window=('kaiser', 5.0),
     h *= up
 
     # Zero-pad our filter to put the output samples at the center
-    n_pre_pad = (down - half_len % down)
+    n_pre_pad = down - half_len % down
     n_post_pad = 0
     n_pre_remove = (half_len + n_pre_pad) // down
     # We should rarely need to do this given our filter lengths...
-    while upfirdn_out_len(len(h) + n_pre_pad + n_post_pad, n_in,
-                          up, down) < n_out + n_pre_remove:
+    while (
+        upfirdn_out_len(len(h) + n_pre_pad + n_post_pad, n_in, up, down)
+        < n_out + n_pre_remove
+    ):
         n_post_pad += 1
-    h = xp.concatenate((xp.zeros(n_pre_pad, dtype=h.dtype), h,
-                        xp.zeros(n_post_pad, dtype=h.dtype)))
+    h = xp.concatenate(
+        (
+            xp.zeros(n_pre_pad, dtype=h.dtype),
+            h,
+            xp.zeros(n_post_pad, dtype=h.dtype),
+        )
+    )
     n_pre_remove_end = n_pre_remove + n_out
 
     # Remove background depending on the padtype option
-    funcs = {'mean': xp.mean,
-             # 'median': xp.median,   # TODO: needs cupy.median implementation
-             'minimum': xp.amin, 'maximum': xp.amax}
-    if padtype == 'constant':
+    funcs = {
+        "mean": xp.mean,
+        # 'median': xp.median,   # TODO: needs cupy.median implementation
+        "minimum": xp.amin,
+        "maximum": xp.amax,
+    }
+    if padtype == "constant":
         background_line = cval
     elif padtype in funcs:
         background_line = [funcs[padtype](x, axis=axis), 0]
-    elif padtype == 'line':
-        background_line = [x.take(0, axis),
-                           (x.take(-1, axis) - x.take(0, axis))*n_in/(n_in-1)]
+    elif padtype == "line":
+        background_line = [
+            x.take(0, axis),
+            (x.take(-1, axis) - x.take(0, axis)) * n_in / (n_in - 1),
+        ]
     else:
         raise ValueError(
-            'padtype must be line, maximum, mean, median, minimum or constant')
+            "padtype must be line, maximum, mean, median, minimum or constant"
+        )
 
-    if padtype == 'line' or padtype in funcs:
+    if padtype == "line" or padtype in funcs:
         rel_len = xp.linspace(0.0, 1.0, n_in, endpoint=False)
         rel_len_nd = _reshape_nd(rel_len, x.ndim, axis)
-        background_in = xp.expand_dims(background_line[0], axis) +\
-            xp.expand_dims(background_line[1], axis) * rel_len_nd
+        background_in = (
+            xp.expand_dims(background_line[0], axis)
+            + xp.expand_dims(background_line[1], axis) * rel_len_nd
+        )
         x = x - background_in.astype(x.dtype)
-    elif padtype == 'constant' and cval is not None:
+    elif padtype == "constant" and cval is not None:
         x = x - cval
 
     # filter then remove excess
     y = upfirdn(h, x, up, down, axis=axis, xp=xp)
-    keep = [slice(None), ]*x.ndim
+    keep = [slice(None)] * x.ndim
     keep[axis] = slice(n_pre_remove, n_pre_remove_end)
     y_keep = y[tuple(keep)]
 
     # Add background back
-    if padtype == 'line' or padtype in funcs:
+    if padtype == "line" or padtype in funcs:
         rel_len = xp.linspace(0.0, 1.0, n_out, endpoint=False)
         rel_len_nd = _reshape_nd(rel_len, x.ndim, axis)
-        background_out = xp.expand_dims(background_line[0], axis) +\
-            xp.expand_dims(background_line[1], axis) * rel_len_nd
+        background_out = (
+            xp.expand_dims(background_line[0], axis)
+            + xp.expand_dims(background_line[1], axis) * rel_len_nd
+        )
         y_keep += background_out.astype(x.dtype)
-    elif padtype == 'constant' and cval is not None:
+    elif padtype == "constant" and cval is not None:
         y_keep += cval
 
     return y_keep

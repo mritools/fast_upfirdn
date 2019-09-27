@@ -9,23 +9,18 @@ import pytest
 array_modules = [np]
 if have_cupy:
     import cupy
+
     array_modules += [cupy]
 
 
 @pytest.mark.parametrize(
     "dtype_x, dtype_h, len_x, mode, function, xp",
     product(
-        [
-            np.float32,
-            np.float64,
-        ],
-        [
-            np.float32,
-            np.float64,
-        ],
+        [np.float32, np.float64],
+        [np.float32, np.float64],
         [2, 3, 4, 5, 6, 7, 8],
-        ['full', 'valid', 'same'],
-        ['correlate', 'convolve'],
+        ["full", "valid", "same"],
+        ["correlate", "convolve"],
         array_modules,
     ),
 )
@@ -34,10 +29,10 @@ def test_convolve_and_correlate(dtype_x, dtype_h, len_x, mode, function, xp):
     for len_h in range(1, len_x):
         h_cpu = np.arange(1, 1 + len_h, dtype=dtype_h)
 
-        if function == 'convolve':
+        if function == "convolve":
             func_cpu = np.convolve
             func_gpu = convolve
-        elif function == 'correlate':
+        elif function == "correlate":
             func_cpu = np.correlate
             func_gpu = correlate
 
@@ -50,36 +45,30 @@ def test_convolve_and_correlate(dtype_x, dtype_h, len_x, mode, function, xp):
 @pytest.mark.parametrize(
     "dtype_x, dtype_h, len_x, mode, function, xp",
     product(
-        [
-            np.float32,
-            np.complex64,
-        ],
-        [
-            np.float32,
-            np.complex64,
-        ],
+        [np.float32, np.complex64],
+        [np.float32, np.complex64],
         [2, 3, 4, 5, 6, 7, 8],
-        ['full', 'valid', 'same'],
-        ['correlate', 'convolve'],
+        ["full", "valid", "same"],
+        ["correlate", "convolve"],
         array_modules,
     ),
 )
 def test_convolve_and_correlate_complex(
-        dtype_x, dtype_h, len_x, mode, function, xp
+    dtype_x, dtype_h, len_x, mode, function, xp
 ):
     x_cpu = np.arange(1, 1 + len_x, dtype=dtype_x)
-    if x_cpu.dtype.kind == 'c':
+    if x_cpu.dtype.kind == "c":
         x_cpu = x_cpu + 1j * x_cpu
 
     for len_h in range(1, len_x):
         h_cpu = np.arange(1, 1 + len_h, dtype=dtype_h)
-        if h_cpu.dtype.kind == 'c':
+        if h_cpu.dtype.kind == "c":
             h_cpu = h_cpu + 1j * h_cpu
 
-        if function == 'convolve':
+        if function == "convolve":
             func_cpu = np.convolve
             func_gpu = convolve
-        elif function == 'correlate':
+        elif function == "correlate":
             func_cpu = np.correlate
             func_gpu = correlate
 

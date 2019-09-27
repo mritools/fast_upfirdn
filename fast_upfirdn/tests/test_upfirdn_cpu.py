@@ -34,14 +34,12 @@ def test_dtype_combos_cpu(dtype_data, dtype_filter):
 
     # up=1 kernel case
     np.testing.assert_allclose(
-        upfirdn_scipy(h, x, up=1, down=2),
-        upfirdn(h, x, up=1, down=2)
+        upfirdn_scipy(h, x, up=1, down=2), upfirdn(h, x, up=1, down=2)
     )
 
     # down=1 kernel case
     np.testing.assert_allclose(
-        upfirdn_scipy(h, x, up=2, down=1),
-        upfirdn(h, x, up=2, down=1)
+        upfirdn_scipy(h, x, up=2, down=1), upfirdn(h, x, up=2, down=1)
     )
 
 
@@ -105,26 +103,28 @@ def test_general_up_and_down_cpu(up, down, nx, nh):
     h = np.arange(1, nh + 1, dtype=dtype_filter)
 
     np.testing.assert_allclose(
-        upfirdn_scipy(h, x, up=up, down=down),
-        upfirdn(h, x, up=up, down=down),
+        upfirdn_scipy(h, x, up=up, down=down), upfirdn(h, x, up=up, down=down)
     )
 
 
-@pytest.mark.parametrize('mode', _upfirdn_modes)
+@pytest.mark.parametrize("mode", _upfirdn_modes)
 def test_extension_modes(mode):
     """Test vs. manually computed results for modes not in numpy's pad."""
     x = np.array([1, 2, 3, 1], dtype=float)
     npre, npost = 6, 6
     y = _pad_test(x, npre=npre, npost=npost, mode=mode)
-    if mode == 'antisymmetric':
+    if mode == "antisymmetric":
         y_expected = np.asarray(
-            [3, 1, -1, -3, -2, -1, 1, 2, 3, 1, -1, -3, -2, -1, 1, 2])
-    elif mode == 'antireflect':
+            [3, 1, -1, -3, -2, -1, 1, 2, 3, 1, -1, -3, -2, -1, 1, 2]
+        )
+    elif mode == "antireflect":
         y_expected = np.asarray(
-            [1, 2, 3, 1, -1, 0, 1, 2, 3, 1, -1, 0, 1, 2, 3, 1])
-    elif mode == 'smooth':
+            [1, 2, 3, 1, -1, 0, 1, 2, 3, 1, -1, 0, 1, 2, 3, 1]
+        )
+    elif mode == "smooth":
         y_expected = np.asarray(
-            [-5, -4, -3, -2, -1, 0, 1, 2, 3, 1, -1, -3, -5, -7, -9, -11])
+            [-5, -4, -3, -2, -1, 0, 1, 2, 3, 1, -1, -3, -5, -7, -9, -11]
+        )
     else:
         y_expected = np.pad(x, (npre, npost), mode=mode)
     np.testing.assert_allclose(y, y_expected)
