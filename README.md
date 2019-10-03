@@ -1,16 +1,42 @@
-**(experimental) upsampled and downsampled convolutions on the GPU**
+**upsampled and downsampled convolutions on the CPU and GPU**
 
-This library currently provides three main functions:
+The core functionality implemented here is an equivalent of
+scipy.signal.upfirdn but with support for both CPU (via NumPy) and GPU
+(via CuPy) computations.
 
-1.) **upfirdn**  (like ``scipy.signal.upfirdn``)
+This function can be used to implement a wide variety of separable
+convolution-based filtering operations on n-dimensional arrays.
 
-2.) **convolve1d**  (similar to ``scipy.ndimage.convolve1d``)
+As an example, a number of relevant functions from scipy and NumPy APIs have
+been implemented.
 
-3.) **convolve_separable**  (similar to ``scipy.ndimage.convolve``, but the kernel must made of 1D kernel along each axis (i.e. separable))
+These currently include:
 
-convolve_separable can be used to implement the equivalent of:
-``scipy.ndimage.uniform_filter``
-``scipy.ndimage.gaussian_filter``
+*from scipy.signal*:
+
+   - ``scipy.signal.upfirdn``
+   - ``scipy.signal.resample_poly``
+
+*from numpy*:
+
+   - ``numpy.convolve`` (floating point convolutions only)
+   - ``numpy.correlate`` (floating point convolutions only)
+
+*from scipy.ndimage*:
+
+   - ``scipy.ndimage.convolve1d``
+   - ``scipy.ndimage.correlate1d``
+   - ``scipy.ndimage.gaussian_filter1d``
+   - ``scipy.ndimage.gaussian_filter``
+   - ``scipy.ndimage.uniform_filter1d``
+   - ``scipy.ndimage.uniform_filter``
+   - ``scipy.ndimage.prewitt``
+   - ``scipy.ndimage.sobel``
+   - ``scipy.ndimage.generic_laplace``
+   - ``scipy.ndimage.laplace``
+   - ``scipy.ndimage.gaussian_laplace``
+   - ``scipy.ndimage.generic_gradient_magnitude``
+   - ``scipy.ndimage.gaussian_gradient_magnitude``
 
 Requires:
 
@@ -18,27 +44,31 @@ Requires:
 - CuPy  (>=6.0.0a1 or so)
 - SciPy (>=0.19)
 
-Optional:
+Optional (for testing/development):
 
 - pytest
 
 **Example**
-
 ```Python
-
 import numpy as np
 import cupy
-from upfirdn_gpu import convolve_separable, convolve1d, correlate1d, uniform_filter1d
+from fast_upfirdn import uniform_filter, convolve_separable
 
 # separable 5x5x5 convolution kernel on the CPU
 x = np.random.randn(256, 256, 256).astype(np.float32)
-w = np.ones((5, ), dtype=np.float32)
-convolve_separable(x, [w, ]*x.ndim)
-# %timeit convolve_separable(x, [w, ]*x.ndim) -> 497 ms ± 6.42 ms
+y = uniform_filter(x, size=5)
+# %timeit convolve_separable(x, [w, ]*x.ndim)
+#    -> 669 ms ± 70.1 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
 
 # separable 5x5x5 convolution kernel on the GPU
 xg = cupy.asarray(x)
 wg = cupy.asarray(w)
-convolve_separable(xg, [wg, ]*x.ndim)
-# %timeit convolve_separable(xg, [wg, ]*x.ndim) -> 21.2 ms ± 5.33 µs
+yg = uniform_filter(xg, size=5)
+# %timeit yg = uniform_filter(xg, size=5)
+#    -> 33.2 ms ± 20.4 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+
+wg = cupy.ones((5, ), dtype=np.float32)
+yg = convolve_separable(xg, [wg, ] * xg.ndim)
+# %timeit convolve_separable(xg, [wg, ]*x.ndim)
+#    -> 20 ms ± 4.79 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
 ```
