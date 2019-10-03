@@ -736,13 +736,20 @@ def _convolve1d(
         out_len = x.shape[-1]
     out_shape[-1] = out_len
 
-    x = cupy.ascontiguousarray(x)
+    if out is not None and out is x:
+        # avoid clobbering existing values in x
+        x = x.copy()
+    else:
+        x = cupy.ascontiguousarray(x)
     x = x.reshape((-1, x.shape[-1]), order="C")
     nbatch = x.shape[0]
 
+    inplace_output = False
     if out is None:
         y = cupy.zeros((nbatch, out_len), dtype=dtype_out)
+        out = y
     else:
+        _out_orig = out
         # output into preallocated array
         if axis != ndim - 1:
             out = out.swapaxes(-1, axis)
@@ -756,6 +763,7 @@ def _convolve1d(
             out = cupy.ascontiguousarray(out)
         out[:] = 0.0
         y = out
+        inplace_output = True
 
     grid_size_x = ceil(y.size / block_size)
     if grid_size_x > cuda_MaxGridDimX:
@@ -788,6 +796,14 @@ def _convolve1d(
         y = y.swapaxes(axis, -1)
     if contiguous_output:
         y = cupy.ascontiguousarray(y)
+    if inplace_output:
+        if _out_orig is not y:
+            if _out_orig.shape != y.shape:
+                raise ValueError(
+                    "output array does not have the expected shape"
+                )
+            _out_orig[...] = y[...]
+        return _out_orig
     return y
 
 
@@ -851,13 +867,20 @@ def upfirdn(
         out_len = _output_len(h_flip.size, x.shape[-1], up, down)
     out_shape[-1] = out_len
 
-    x = cupy.ascontiguousarray(x)
+    if out is not None and out is x:
+        # avoid clobbering existing values in x
+        x = x.copy()
+    else:
+        x = cupy.ascontiguousarray(x)
     x = x.reshape((-1, x.shape[-1]), order="C")
     nbatch = x.shape[0]
 
+    inplace_output = False
     if out is None:
         y = cupy.zeros((nbatch, out_len), dtype=dtype_out)
+        out = y
     else:
+        _out_orig = out
         # output into preallocated array
         if axis != ndim - 1:
             out = out.swapaxes(-1, axis)
@@ -871,6 +894,7 @@ def upfirdn(
             out = cupy.ascontiguousarray(out)
         out[:] = 0.0
         y = out
+        inplace_output = True
 
     grid_size_x = ceil(y.size / block_size)
     if grid_size_x > cuda_MaxGridDimX:
@@ -935,4 +959,12 @@ def upfirdn(
         y = y.swapaxes(axis, -1)
     if contiguous_output:
         y = cupy.ascontiguousarray(y)
+    if inplace_output:
+        if _out_orig is not y:
+            if _out_orig.shape != y.shape:
+                raise ValueError(
+                    "output array does not have the expected shape"
+                )
+            _out_orig[...] = y[...]
+        return _out_orig
     return y

@@ -65,9 +65,6 @@ def _invalid_origin(origin, lenw):
 
 def _get_output(output, arr, shape=None, xp=np):
     xp, on_gpu = get_array_module(arr, xp)
-    if on_gpu and isinstance(output, xp.ndarray):
-        # TODO: support in-place output on GPU
-        raise NotImplementedError("in-place operation not currently supported")
     if shape is None:
         shape = arr.shape
     if output is None:
@@ -198,7 +195,6 @@ def convolve1d(
     *,
     xp=None,
     crop=True,  # if False, will get a "full" convolution instead
-    # crop=False operates like np.convolve with mode='full'
 ):
     """Calculate a one-dimensional convolution along the given axis.
 
@@ -206,6 +202,13 @@ def convolve1d(
 
     This version supports only ``np.float32``, ``np.float64``,
     ``np.complex64`` and ``np.complex128`` dtypes.
+
+    Notes
+    -----
+    crop=True gives an output the same size as the input ``arr``.
+
+    Setting crop=False gives an output that is the full size of the
+    convolution. ``output.shape[axis] = arr.shape[axis] + len(weights) - 1``
     """
     if _invalid_origin(origin, len(weights)):
         raise ValueError(
@@ -252,9 +255,6 @@ def convolve1d(
                 sl_out[axis] = slice(arr.shape[axis])
             return out[tuple(sl_out)]
     axis = _check_axis(axis, arr.ndim)
-
-    if output is not None:
-        raise NotImplementedError("in-place operation not implemented")
 
     w_len_half = len(weights) // 2
     if crop:
@@ -342,7 +342,7 @@ def uniform_filter1d(
     arr = xp.asarray(arr)
     if size < 1:
         raise RuntimeError("incorrect filter size")
-    # output = _get_output(output, arr)  # TODO: add output support
+    output = _get_output(output, arr)
     if (size // 2 + origin < 0) or (size // 2 + origin >= size):
         raise ValueError("invalid origin")
     weights = xp.full(
@@ -373,20 +373,9 @@ def uniform_filter(
         if sizes[ii] > 1
     ]
     if len(axes) > 0:
-
-        if False:
-            # TODO: add output != None support
-            for axis, size, origin, mode in axes:
-                uniform_filter1d(
-                    arr, int(size), axis, output, mode, cval, origin
-                )
-                arr = output
-        else:
-            for axis, size, origin, mode in axes:
-                arr = uniform_filter1d(
-                    arr, int(size), axis, None, mode, cval, origin
-                )
-            output[...] = arr[...]
+        for axis, size, origin, mode in axes:
+            uniform_filter1d(arr, int(size), axis, output, mode, cval, origin)
+            arr = output
     else:
         output[...] = arr[...]
     return output
@@ -485,27 +474,11 @@ def gaussian_filter(
         if sigmas[ii] > 1e-15
     ]
     if len(axes) > 0:
-        if False:
-            # TODO: add support for output argument
-            for axis, sigma, order, mode in axes:
-                gaussian_filter1d(
-                    arr,
-                    sigma,
-                    axis,
-                    order,
-                    output,
-                    mode,
-                    cval,
-                    truncate,
-                    xp=xp,
-                )
-                arr = output
-        else:
-            for axis, sigma, order, mode in axes:
-                arr = gaussian_filter1d(
-                    arr, sigma, axis, order, None, mode, cval, truncate, xp=xp
-                )
-            output[...] = arr[...]
+        for axis, sigma, order, mode in axes:
+            gaussian_filter1d(
+                arr, sigma, axis, order, output, mode, cval, truncate, xp=xp
+            )
+            arr = output
     else:
         output[...] = arr[...]
     return output
@@ -529,22 +502,10 @@ def prewitt(arr, axis=-1, output=None, mode="reflect", cval=0.0, *, xp=None):
     filt2 = [1, 1, 1]
     if on_gpu:
         filt1, filt2 = map(cupy.asarray, [filt1, filt2])
-    if not on_gpu:
-        # TODO: enable output support in correlate1d on the GPU
-
-        correlate1d(arr, filt1, axis, output, modes[axis], cval, 0, xp=xp)
-        axes = [ii for ii in range(arr.ndim) if ii != axis]
-        for ii in axes:
-            correlate1d(output, filt2, ii, output, modes[ii], cval, 0, xp=xp)
-    else:
-        output = correlate1d(
-            arr, filt1, axis, None, modes[axis], cval, 0, xp=xp
-        )
-        axes = [ii for ii in range(arr.ndim) if ii != axis]
-        for ii in axes:
-            output = correlate1d(
-                output, filt2, ii, None, modes[ii], cval, 0, xp=xp
-            )
+    correlate1d(arr, filt1, axis, output, modes[axis], cval, 0, xp=xp)
+    axes = [ii for ii in range(arr.ndim) if ii != axis]
+    for ii in axes:
+        correlate1d(output, filt2, ii, output, modes[ii], cval, 0, xp=xp)
     return output
 
 
@@ -565,23 +526,10 @@ def sobel(arr, axis=-1, output=None, mode="reflect", cval=0.0, *, xp=None):
     filt2 = [1, 2, 1]
     if on_gpu:
         filt1, filt2 = map(cupy.asarray, [filt1, filt2])
-
-    if not on_gpu:
-        # TODO: enable output support in correlate1d on the GPU
-        correlate1d(arr, filt1, axis, output, modes[axis], cval, 0, xp=xp)
-        axes = [ii for ii in range(arr.ndim) if ii != axis]
-        for ii in axes:
-            correlate1d(output, filt2, ii, output, modes[ii], cval, 0, xp=xp)
-    else:
-        output = correlate1d(
-            arr, filt1, axis, None, modes[axis], cval, 0, xp=xp
-        )
-        axes = [ii for ii in range(arr.ndim) if ii != axis]
-        for ii in axes:
-            output = correlate1d(
-                output, filt2, ii, None, modes[ii], cval, 0, xp=xp
-            )
-
+    correlate1d(arr, filt1, axis, output, modes[axis], cval, 0, xp=xp)
+    axes = [ii for ii in range(arr.ndim) if ii != axis]
+    for ii in axes:
+        correlate1d(output, filt2, ii, output, modes[ii], cval, 0, xp=xp)
     return output
 
 
@@ -613,49 +561,25 @@ def generic_laplace(
     axes = list(range(arr.ndim))
     if len(axes) > 0:
         modes = _normalize_sequence(mode, len(axes))
-        if False:
-            # TODO: enable branch once in-place output is supported
-            derivative2(
-                arr,
-                axes[0],
-                output,
-                modes[0],
-                cval,
-                *extra_arguments,
-                **extra_keywords,
-            )
-        else:
-            output = derivative2(
-                arr,
-                axes[0],
-                None,
-                modes[0],
-                cval,
-                *extra_arguments,
-                **extra_keywords,
-            )
+        derivative2(
+            arr,
+            axes[0],
+            output,
+            modes[0],
+            cval,
+            *extra_arguments,
+            **extra_keywords,
+        )
         for ii in range(1, len(axes)):
-            if False:
-                # TODO: enable branch once in-place output is supported
-                tmp = derivative2(
-                    arr,
-                    axes[ii],
-                    output.dtype,
-                    modes[ii],
-                    cval,
-                    *extra_arguments,
-                    **extra_keywords,
-                )
-            else:
-                tmp = derivative2(
-                    arr,
-                    axes[ii],
-                    None,
-                    modes[ii],
-                    cval,
-                    *extra_arguments,
-                    **extra_keywords,
-                )
+            tmp = derivative2(
+                arr,
+                axes[ii],
+                output.dtype,
+                modes[ii],
+                cval,
+                *extra_arguments,
+                **extra_keywords,
+            )
             output += tmp
     else:
         output[...] = arr[...]
@@ -741,51 +665,27 @@ def generic_gradient_magnitude(
     axes = list(range(arr.ndim))
     if len(axes) > 0:
         modes = _normalize_sequence(mode, len(axes))
-        if False:
-            # TODO: enable branch once in-place output is supported
-            derivative(
-                arr,
-                axes[0],
-                output,
-                modes[0],
-                cval,
-                *extra_arguments,
-                **extra_keywords,
-            )
-        else:
-            output = derivative(
-                arr,
-                axes[0],
-                None,
-                modes[0],
-                cval,
-                *extra_arguments,
-                **extra_keywords,
-            )
+        derivative(
+            arr,
+            axes[0],
+            output,
+            modes[0],
+            cval,
+            *extra_arguments,
+            **extra_keywords,
+        )
 
         xp.multiply(output, output, output)
         for ii in range(1, len(axes)):
-            if False:
-                # TODO: enable branch once in-place output is supported
-                tmp = derivative(
-                    arr,
-                    axes[ii],
-                    output.dtype,
-                    modes[ii],
-                    cval,
-                    *extra_arguments,
-                    **extra_keywords,
-                )
-            else:
-                tmp = derivative(
-                    arr,
-                    axes[ii],
-                    None,
-                    modes[ii],
-                    cval,
-                    *extra_arguments,
-                    **extra_keywords,
-                )
+            tmp = derivative(
+                arr,
+                axes[ii],
+                output.dtype,
+                modes[ii],
+                cval,
+                *extra_arguments,
+                **extra_keywords,
+            )
             xp.multiply(tmp, tmp, tmp)
             output += tmp
         # This allows the sqrt to work with a different default casting
