@@ -258,13 +258,7 @@ def resample_poly(
         from scipy.signal import resample_poly
 
         return resample_poly(
-            x,
-            up,
-            down,
-            axis=axis,
-            window=window,
-            padtype=padtype,
-            cval=cval,
+            x, up, down, axis=axis, window=window, padtype=padtype, cval=cval
         )
 
     x = xp.asarray(x)

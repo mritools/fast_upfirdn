@@ -4,6 +4,7 @@ import numpy as np
 
 try:
     import cupy
+
     have_cupy = True
 except ImportError:
     have_cupy = False
@@ -11,8 +12,13 @@ except ImportError:
 allow_device_transfers = False
 
 
-__all__ = ['allow_device_transfers', 'have_cupy', 'get_array_module',
-           'array_on_device', 'check_device']
+__all__ = [
+    "allow_device_transfers",
+    "have_cupy",
+    "get_array_module",
+    "array_on_device",
+    "check_device",
+]
 
 
 def get_array_module(arr, xp=None):
@@ -46,8 +52,9 @@ def check_device(arr, xp, autoconvert=allow_device_transfers):
     elif xp == np:
         if isinstance(arr, np.ndarray):
             return arr
-        elif (hasattr(arr, '__array_interface__') and not
-              (have_cupy and hasattr(arr, '__cuda_array_interface__'))):
+        elif hasattr(arr, "__array_interface__") and not (
+            have_cupy and hasattr(arr, "__cuda_array_interface__")
+        ):
             return np.asarray(arr)
         else:
             raise ValueError(
@@ -56,7 +63,7 @@ def check_device(arr, xp, autoconvert=allow_device_transfers):
     elif have_cupy and xp == cupy:
         if isinstance(arr, cupy.ndarray):
             return arr
-        elif hasattr(arr, '__cuda_array_interface__'):
+        elif hasattr(arr, "__cuda_array_interface__"):
             return cupy.asarray(arr)
         else:
             raise ValueError(
@@ -81,7 +88,7 @@ def array_on_device(arr, xp):
     A cupy.ndarray if ``xp == cupy``, otherwise a numpy.ndarray.
     """
     if xp == np:
-        if have_cupy and hasattr(arr, '__cuda_array_interface__'):
+        if have_cupy and hasattr(arr, "__cuda_array_interface__"):
             # copy back from GPU
             return arr.get()
     return xp.asarray(arr)
