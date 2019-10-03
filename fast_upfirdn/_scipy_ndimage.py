@@ -17,6 +17,8 @@ aside from the following differences:
     arrays.
 
 """
+from functools import partial
+
 import numpy as np
 import scipy.ndimage as ndi
 from fast_upfirdn.cpu._upfirdn import upfirdn as upfirdn_cpu
@@ -340,14 +342,15 @@ def uniform_filter1d(
     """
     xp, _ = get_array_module(arr, xp)
     arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
+
     if size < 1:
         raise RuntimeError("incorrect filter size")
     output = _get_output(output, arr)
     if (size // 2 + origin < 0) or (size // 2 + origin >= size):
         raise ValueError("invalid origin")
-    weights = xp.full(
-        (size,), 1 / size, dtype=np.result_type(arr.real.dtype, np.float32)
-    )
+    weights = xp.full((size,), 1 / size, dtype=dtype)
     return convolve1d(arr, weights, axis, output, mode, cval, origin, xp=xp)
 
 
@@ -433,12 +436,16 @@ def gaussian_filter1d(
 
     """
     xp, _ = get_array_module(arr, xp)
+    arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
+
     sd = float(sigma)
     # make the radius of the filter equal to truncate standard deviations
     lw = int(truncate * sd + 0.5)
     # Since we are calling correlate, not convolve, revert the kernel
     weights = _gaussian_kernel1d(sigma, order, lw)[::-1]
-    weights = xp.asarray(weights)
+    weights = xp.asarray(weights, dtype=dtype)
     return correlate1d(arr, weights, axis, output, mode, cval, 0, xp=xp)
 
 
@@ -463,6 +470,8 @@ def gaussian_filter(
     """
     xp, on_gpu = get_array_module(arr, xp)
     arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
     output = _get_output(output, arr, xp=xp)
     orders = _normalize_sequence(order, arr.ndim)
     sigmas = _normalize_sequence(sigma, arr.ndim)
@@ -494,14 +503,17 @@ def prewitt(arr, axis=-1, output=None, mode="reflect", cval=0.0, *, xp=None):
 
     """
     xp, on_gpu = get_array_module(arr, xp)
-    arr = check_device(arr, xp)
+    arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
     axis = _check_axis(axis, arr.ndim)
     output = _get_output(output, arr)
     modes = _normalize_sequence(mode, arr.ndim)
     filt1 = [-1, 0, 1]
     filt2 = [1, 1, 1]
     if on_gpu:
-        filt1, filt2 = map(cupy.asarray, [filt1, filt2])
+        dtype = xp.result_type(arr.real.dtype, xp.float32)
+        filt1, filt2 = map(partial(cupy.asarray, dtype=dtype), [filt1, filt2])
     correlate1d(arr, filt1, axis, output, modes[axis], cval, 0, xp=xp)
     axes = [ii for ii in range(arr.ndim) if ii != axis]
     for ii in axes:
@@ -519,7 +531,9 @@ def sobel(arr, axis=-1, output=None, mode="reflect", cval=0.0, *, xp=None):
 
     """
     xp, on_gpu = get_array_module(arr, xp)
-    arr = check_device(arr, xp)
+    arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
     output = _get_output(output, arr)
     modes = _normalize_sequence(mode, arr.ndim)
     filt1 = [-1, 0, 1]
@@ -556,7 +570,9 @@ def generic_laplace(
     if extra_keywords is None:
         extra_keywords = {}
     xp, _ = get_array_module(arr, xp)
-    arr = check_device(arr, xp)
+    arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
     output = _get_output(output, arr)
     axes = list(range(arr.ndim))
     if len(axes) > 0:
@@ -596,10 +612,13 @@ def laplace(arr, output=None, mode="reflect", cval=0.0, *, xp=None):
 
     """
     xp, _ = get_array_module(arr, xp)
-    arr = check_device(arr, xp)
+    arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
 
     def derivative2(arr, axis, output, mode, cval, xp=xp):
-        h = xp.asarray([1, -2, 1])
+        h_dtype = xp.result_type(arr.real.dtype, xp.float32)
+        h = xp.asarray([1, -2, 1], dtype=h_dtype)
         return correlate1d(arr, h, axis, output, mode, cval, 0, xp=xp)
 
     return generic_laplace(arr, derivative2, output, mode, cval, xp=xp)
@@ -617,7 +636,9 @@ def gaussian_laplace(
 
     """
     xp, _ = get_array_module(arr, xp)
-    arr = check_device(arr, xp)
+    arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
 
     def derivative2(arr, axis, output, mode, cval, sigma, xp=xp, **kwargs):
         order = [0] * arr.ndim
@@ -660,7 +681,9 @@ def generic_gradient_magnitude(
     if extra_keywords is None:
         extra_keywords = {}
     xp, _ = get_array_module(arr, xp)
-    arr = check_device(arr, xp)
+    arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
     output = _get_output(output, arr)
     axes = list(range(arr.ndim))
     if len(axes) > 0:
@@ -706,7 +729,9 @@ def gaussian_gradient_magnitude(
     ``np.complex64`` and ``np.complex128`` dtypes.
     """
     xp, _ = get_array_module(arr, xp)
-    arr = check_device(arr, xp)
+    arr = xp.asarray(arr)
+    dtype = xp.result_type(arr.real.dtype, xp.float32)
+    arr = arr.astype(dtype, copy=False)
 
     def derivative(arr, axis, output, mode, cval, sigma, *, xp=xp, **kwargs):
         order = [0] * arr.ndim
