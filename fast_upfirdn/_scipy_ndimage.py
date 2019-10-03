@@ -10,9 +10,9 @@ aside from the following differences:
     (``scipy.ndimage`` does not support complex-valued inputs)
 3.) convolve1d currently has a ``crop`` kwarg. If set to False, a full
     convolution instead of one truncated to the size of the input is given.
-4.) All functions have an ``xp`` argument that can be set to either the NumPy
-    or CuPy module or None. If None, the array backend to use is determined
-    based on the type of the input.
+4.) All functions have an ``xp`` keyword-only argument that can be set to
+    either the NumPy or CuPy module or None. If None, the array backend to use
+    is determined based on the type of the input array.
 5.) In-place operation via ``output`` is not currently supported for GPU
     arrays.
 
@@ -39,6 +39,13 @@ __all__ = [
     "gaussian_filter",
     "uniform_filter1d",
     "uniform_filter",
+    "prewitt",
+    "sobel",
+    "generic_laplace",
+    "laplace",
+    "gaussian_laplace",
+    "generic_gradient_magnitude",
+    "gaussian_gradient_magnitude",
     # not from SciPy API
     "convolve_separable",
 ]
@@ -59,6 +66,7 @@ def _invalid_origin(origin, lenw):
 def _get_output(output, arr, shape=None, xp=np):
     xp, on_gpu = get_array_module(arr, xp)
     if on_gpu and isinstance(output, xp.ndarray):
+        # TODO: support in-place output on GPU
         raise NotImplementedError("in-place operation not currently supported")
     if shape is None:
         shape = arr.shape
@@ -313,8 +321,15 @@ def correlate1d(
 
 
 def uniform_filter1d(
-    arr, size, axis=-1, output=None, mode="reflect", cval=0.0, origin=0, *,
-    xp=None
+    arr,
+    size,
+    axis=-1,
+    output=None,
+    mode="reflect",
+    cval=0.0,
+    origin=0,
+    *,
+    xp=None,
 ):
     """Calculate a one-dimensional uniform filter along the given axis.
 
@@ -337,8 +352,7 @@ def uniform_filter1d(
 
 
 def uniform_filter(
-    arr, size=3, output=None, mode="reflect", cval=0.0, origin=0, *,
-    xp=None
+    arr, size=3, output=None, mode="reflect", cval=0.0, origin=0, *, xp=None
 ):
     """Multi-dimensional uniform filter.
 
@@ -360,17 +374,19 @@ def uniform_filter(
     ]
     if len(axes) > 0:
 
-        # TODO: add output != None support
-        # for axis, size, origin, mode in axes:
-        #     uniform_filter1d(arr, int(size), axis, output, mode,
-        #                      cval, origin)
-        #     arr = output
-
-        for axis, size, origin, mode in axes:
-            arr = uniform_filter1d(
-                arr, int(size), axis, output, mode, cval, origin
-            )
-        output = arr
+        if False:
+            # TODO: add output != None support
+            for axis, size, origin, mode in axes:
+                uniform_filter1d(
+                    arr, int(size), axis, output, mode, cval, origin
+                )
+                arr = output
+        else:
+            for axis, size, origin, mode in axes:
+                arr = uniform_filter1d(
+                    arr, int(size), axis, None, mode, cval, origin
+                )
+            output[...] = arr[...]
     else:
         output[...] = arr[...]
     return output
@@ -438,8 +454,15 @@ def gaussian_filter1d(
 
 
 def gaussian_filter(
-    arr, sigma, order=0, output=None, mode="reflect", cval=0.0, truncate=4.0,
-    *, xp=None
+    arr,
+    sigma,
+    order=0,
+    output=None,
+    mode="reflect",
+    cval=0.0,
+    truncate=4.0,
+    *,
+    xp=None,
 ):
     """Multidimensional Gaussian filter.
 
@@ -462,12 +485,343 @@ def gaussian_filter(
         if sigmas[ii] > 1e-15
     ]
     if len(axes) > 0:
-        for axis, sigma, order, mode in axes:
-            gaussian_filter1d(
-                arr, sigma, axis, order, output, mode, cval, truncate
-            )
-            # arr = output
-        output = arr  # TODO: support output argument
+        if False:
+            # TODO: add support for output argument
+            for axis, sigma, order, mode in axes:
+                gaussian_filter1d(
+                    arr,
+                    sigma,
+                    axis,
+                    order,
+                    output,
+                    mode,
+                    cval,
+                    truncate,
+                    xp=xp,
+                )
+                arr = output
+        else:
+            for axis, sigma, order, mode in axes:
+                arr = gaussian_filter1d(
+                    arr, sigma, axis, order, None, mode, cval, truncate, xp=xp
+                )
+            output[...] = arr[...]
     else:
         output[...] = arr[...]
     return output
+
+
+def prewitt(arr, axis=-1, output=None, mode="reflect", cval=0.0, *, xp=None):
+    """Apply a Prewitt filter.
+
+    See ``scipy.ndimage.prewitt``
+
+    This version supports only ``np.float32``, ``np.float64``,
+    ``np.complex64`` and ``np.complex128`` dtypes.
+
+    """
+    xp, on_gpu = get_array_module(arr, xp)
+    arr = check_device(arr, xp)
+    axis = _check_axis(axis, arr.ndim)
+    output = _get_output(output, arr)
+    modes = _normalize_sequence(mode, arr.ndim)
+    filt1 = [-1, 0, 1]
+    filt2 = [1, 1, 1]
+    if on_gpu:
+        filt1, filt2 = map(cupy.asarray, [filt1, filt2])
+    if not on_gpu:
+        # TODO: enable output support in correlate1d on the GPU
+
+        correlate1d(arr, filt1, axis, output, modes[axis], cval, 0, xp=xp)
+        axes = [ii for ii in range(arr.ndim) if ii != axis]
+        for ii in axes:
+            correlate1d(output, filt2, ii, output, modes[ii], cval, 0, xp=xp)
+    else:
+        output = correlate1d(
+            arr, filt1, axis, None, modes[axis], cval, 0, xp=xp
+        )
+        axes = [ii for ii in range(arr.ndim) if ii != axis]
+        for ii in axes:
+            output = correlate1d(
+                output, filt2, ii, None, modes[ii], cval, 0, xp=xp
+            )
+    return output
+
+
+def sobel(arr, axis=-1, output=None, mode="reflect", cval=0.0, *, xp=None):
+    """Apply a sobel filter.
+
+    See ``scipy.ndimage.sobel``
+
+    This version supports only ``np.float32``, ``np.float64``,
+    ``np.complex64`` and ``np.complex128`` dtypes.
+
+    """
+    xp, on_gpu = get_array_module(arr, xp)
+    arr = check_device(arr, xp)
+    output = _get_output(output, arr)
+    modes = _normalize_sequence(mode, arr.ndim)
+    filt1 = [-1, 0, 1]
+    filt2 = [1, 2, 1]
+    if on_gpu:
+        filt1, filt2 = map(cupy.asarray, [filt1, filt2])
+
+    if not on_gpu:
+        # TODO: enable output support in correlate1d on the GPU
+        correlate1d(arr, filt1, axis, output, modes[axis], cval, 0, xp=xp)
+        axes = [ii for ii in range(arr.ndim) if ii != axis]
+        for ii in axes:
+            correlate1d(output, filt2, ii, output, modes[ii], cval, 0, xp=xp)
+    else:
+        output = correlate1d(
+            arr, filt1, axis, None, modes[axis], cval, 0, xp=xp
+        )
+        axes = [ii for ii in range(arr.ndim) if ii != axis]
+        for ii in axes:
+            output = correlate1d(
+                output, filt2, ii, None, modes[ii], cval, 0, xp=xp
+            )
+
+    return output
+
+
+def generic_laplace(
+    arr,
+    derivative2,
+    output=None,
+    mode="reflect",
+    cval=0.0,
+    extra_arguments=(),
+    extra_keywords=None,
+    *,
+    xp=None,
+):
+    """
+    N-dimensional Laplace filter using a provided second derivative function.
+
+    See ``scipy.ndimage.generic_laplace``
+
+    This version supports only ``np.float32``, ``np.float64``,
+    ``np.complex64`` and ``np.complex128`` dtypes.
+
+    """
+    if extra_keywords is None:
+        extra_keywords = {}
+    xp, _ = get_array_module(arr, xp)
+    arr = check_device(arr, xp)
+    output = _get_output(output, arr)
+    axes = list(range(arr.ndim))
+    if len(axes) > 0:
+        modes = _normalize_sequence(mode, len(axes))
+        if False:
+            # TODO: enable branch once in-place output is supported
+            derivative2(
+                arr,
+                axes[0],
+                output,
+                modes[0],
+                cval,
+                *extra_arguments,
+                **extra_keywords,
+            )
+        else:
+            output = derivative2(
+                arr,
+                axes[0],
+                None,
+                modes[0],
+                cval,
+                *extra_arguments,
+                **extra_keywords,
+            )
+        for ii in range(1, len(axes)):
+            if False:
+                # TODO: enable branch once in-place output is supported
+                tmp = derivative2(
+                    arr,
+                    axes[ii],
+                    output.dtype,
+                    modes[ii],
+                    cval,
+                    *extra_arguments,
+                    **extra_keywords,
+                )
+            else:
+                tmp = derivative2(
+                    arr,
+                    axes[ii],
+                    None,
+                    modes[ii],
+                    cval,
+                    *extra_arguments,
+                    **extra_keywords,
+                )
+            output += tmp
+    else:
+        output[...] = arr[...]
+    return output
+
+
+def laplace(arr, output=None, mode="reflect", cval=0.0, *, xp=None):
+    """N-dimensional Laplace filter based on approximate second derivatives.
+
+    See ``scipy.ndimage.laplace``
+
+    This version supports only ``np.float32``, ``np.float64``,
+    ``np.complex64`` and ``np.complex128`` dtypes.
+
+    """
+    xp, _ = get_array_module(arr, xp)
+    arr = check_device(arr, xp)
+
+    def derivative2(arr, axis, output, mode, cval, xp=xp):
+        h = xp.asarray([1, -2, 1])
+        return correlate1d(arr, h, axis, output, mode, cval, 0, xp=xp)
+
+    return generic_laplace(arr, derivative2, output, mode, cval, xp=xp)
+
+
+def gaussian_laplace(
+    arr, sigma, output=None, mode="reflect", cval=0.0, *, xp=None, **kwargs
+):
+    """Multidimensional Laplace filter using gaussian second derivatives.
+
+    See ``scipy.ndimage.gaussian_laplace``
+
+    This version supports only ``np.float32``, ``np.float64``,
+    ``np.complex64`` and ``np.complex128`` dtypes.
+
+    """
+    xp, _ = get_array_module(arr, xp)
+    arr = check_device(arr, xp)
+
+    def derivative2(arr, axis, output, mode, cval, sigma, xp=xp, **kwargs):
+        order = [0] * arr.ndim
+        order[axis] = 2
+        return gaussian_filter(
+            arr, sigma, order, output, mode, cval, xp=xp, **kwargs
+        )
+
+    return generic_laplace(
+        arr,
+        derivative2,
+        output,
+        mode,
+        cval,
+        extra_arguments=(sigma,),
+        extra_keywords=kwargs,
+        xp=xp,
+    )
+
+
+def generic_gradient_magnitude(
+    arr,
+    derivative,
+    output=None,
+    mode="reflect",
+    cval=0.0,
+    extra_arguments=(),
+    extra_keywords=None,
+    *,
+    xp=None,
+):
+    """Gradient magnitude using a provided gradient function.
+
+    See ``scipy.ndimage.generic_gradient_magnitude``
+
+    This version supports only ``np.float32``, ``np.float64``,
+    ``np.complex64`` and ``np.complex128`` dtypes.
+
+    """
+    if extra_keywords is None:
+        extra_keywords = {}
+    xp, _ = get_array_module(arr, xp)
+    arr = check_device(arr, xp)
+    output = _get_output(output, arr)
+    axes = list(range(arr.ndim))
+    if len(axes) > 0:
+        modes = _normalize_sequence(mode, len(axes))
+        if False:
+            # TODO: enable branch once in-place output is supported
+            derivative(
+                arr,
+                axes[0],
+                output,
+                modes[0],
+                cval,
+                *extra_arguments,
+                **extra_keywords,
+            )
+        else:
+            output = derivative(
+                arr,
+                axes[0],
+                None,
+                modes[0],
+                cval,
+                *extra_arguments,
+                **extra_keywords,
+            )
+
+        xp.multiply(output, output, output)
+        for ii in range(1, len(axes)):
+            if False:
+                # TODO: enable branch once in-place output is supported
+                tmp = derivative(
+                    arr,
+                    axes[ii],
+                    output.dtype,
+                    modes[ii],
+                    cval,
+                    *extra_arguments,
+                    **extra_keywords,
+                )
+            else:
+                tmp = derivative(
+                    arr,
+                    axes[ii],
+                    None,
+                    modes[ii],
+                    cval,
+                    *extra_arguments,
+                    **extra_keywords,
+                )
+            xp.multiply(tmp, tmp, tmp)
+            output += tmp
+        # This allows the sqrt to work with a different default casting
+        xp.sqrt(output, output, casting="unsafe")
+    else:
+        output[...] = arr[...]
+    return output
+
+
+def gaussian_gradient_magnitude(
+    arr, sigma, output=None, mode="reflect", cval=0.0, *, xp=None, **kwargs
+):
+    """Multidimensional gradient magnitude using Gaussian derivatives.
+
+    See ``scipy.ndimage.gaussian_gradient_magnitude``
+
+    This version supports only ``np.float32``, ``np.float64``,
+    ``np.complex64`` and ``np.complex128`` dtypes.
+    """
+    xp, _ = get_array_module(arr, xp)
+    arr = check_device(arr, xp)
+
+    def derivative(arr, axis, output, mode, cval, sigma, *, xp=xp, **kwargs):
+        order = [0] * arr.ndim
+        order[axis] = 1
+        return gaussian_filter(
+            arr, sigma, order, output, mode, cval, xp=xp, **kwargs
+        )
+
+    return generic_gradient_magnitude(
+        arr,
+        derivative,
+        output,
+        mode,
+        cval,
+        extra_arguments=(sigma,),
+        extra_keywords=kwargs,
+        xp=xp,
+    )
