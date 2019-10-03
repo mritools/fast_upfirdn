@@ -1,0 +1,16 @@
+
+The upfirdn code here is adapted from Cython code that originated in SciPy.
+The numpy and scipy equivalents are based on code within their corresponding
+functions in the original libraries.
+
+Name: SciPy
+Files: fast_upfirdn/cpu/*,
+       fast_upfirdn/_scipy_signal.py
+       fast_upfirdn/_scipy_ndimage.py
+License: 3-clause BSD
+    For details, see license/scipy_LICENSE.txt
+
+Name: NumPy
+Files: fast_upfirdn/_numpy.py
+License: 3-clause BSD
+    For details, see license/numpy_LICENSE.txt
