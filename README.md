@@ -14,31 +14,31 @@ These currently include:
 
 **From scipy.signal**:
 
-   - ``scipy.signal.upfirdn``
-   - ``scipy.signal.resample_poly``
+   - ``upfirdn``
+   - ``resample_poly``
 
 **From numpy**:
 
-   - ``numpy.convolve`` (floating point convolutions only)
-   - ``numpy.correlate`` (floating point convolutions only)
+   - ``convolve`` (floating point convolutions only)
+   - ``correlate`` (floating point convolutions only)
 
 **From scipy.ndimage**:
 
-   - ``scipy.ndimage.convolve1d``
-   - ``scipy.ndimage.correlate1d``
-   - ``scipy.ndimage.gaussian_filter1d``
-   - ``scipy.ndimage.gaussian_filter``
-   - ``scipy.ndimage.uniform_filter1d``
-   - ``scipy.ndimage.uniform_filter``
-   - ``scipy.ndimage.prewitt``
-   - ``scipy.ndimage.sobel``
-   - ``scipy.ndimage.generic_laplace``
-   - ``scipy.ndimage.laplace``
-   - ``scipy.ndimage.gaussian_laplace``
-   - ``scipy.ndimage.generic_gradient_magnitude``
-   - ``scipy.ndimage.gaussian_gradient_magnitude``
+   - ``convolve1d``
+   - ``correlate1d``
+   - ``gaussian_filter1d``
+   - ``gaussian_filter``
+   - ``uniform_filter1d``
+   - ``uniform_filter``
+   - ``prewitt``
+   - ``sobel``
+   - ``generic_laplace``
+   - ``laplace``
+   - ``gaussian_laplace``
+   - ``generic_gradient_magnitude``
+   - ``gaussian_gradient_magnitude``
 
-Requires:
+**Requires:**
 
 - NumPy
 - CuPy  (>=6.0.0a1 or so)
@@ -47,6 +47,16 @@ Requires:
 Optional (for testing/development):
 
 - pytest
+
+**Installation:**
+
+This package is in the early stages of development and is not yet available via
+PyPI (pip) or conda. Users can download the source from GitHub, navigate to the
+source directory and run:
+
+```Python
+pip install . -v
+```
 
 **Example**
 ```Python
