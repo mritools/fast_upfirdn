@@ -1,8 +1,8 @@
-**upsampled and downsampled convolutions on the CPU and GPU**
+# separable n-dimensional convolution using CuPy
 
-The core functionality implemented here is an equivalent of
+The core low-level function implemented here is an equivalent of
 scipy.signal.upfirdn but with support for both CPU (via NumPy) and GPU
-(via CuPy) computations.
+(via CuPy).
 
 This function can be used to implement a wide variety of separable
 convolution-based filtering operations on n-dimensional arrays.
@@ -12,17 +12,17 @@ been implemented.
 
 These currently include:
 
-*from scipy.signal*:
+**From scipy.signal**:
 
    - ``scipy.signal.upfirdn``
    - ``scipy.signal.resample_poly``
 
-*from numpy*:
+**From numpy**:
 
    - ``numpy.convolve`` (floating point convolutions only)
    - ``numpy.correlate`` (floating point convolutions only)
 
-*from scipy.ndimage*:
+**From scipy.ndimage**:
 
    - ``scipy.ndimage.convolve1d``
    - ``scipy.ndimage.correlate1d``
