@@ -132,8 +132,8 @@ DTYPE_DATA _extend_left(DTYPE_DATA *x, long long idx, long long len_x,
     case MODE_SMOOTH:
         return x[0] + (DTYPE_DATA)idx * (x[1] - x[0]);
     case MODE_LINE:
-        lin_slope = (x[len_x - 1] - x[0]) / (len_x - 1)
-        return x[0] + (DTYPE_DATA)idx * lin_slope
+        lin_slope = (x[len_x - 1] - x[0]) / (DTYPE_DATA)(len_x - 1);
+        return x[0] + (DTYPE_DATA)idx * lin_slope;
     case MODE_ANTISYMMETRIC:
         if ((-idx) < len_x)
         {
@@ -238,8 +238,8 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
                    (DTYPE_DATA)(idx - len_x + 1) *
                    (x[len_x - 1] - x[len_x - 2]);
         case MODE_LINE:
-            lin_slope = (x[len_x - 1] - x[0]) / (len_x - 1)
-            return x[len_x - 1] + (DTYPE_DATA)(idx - len_x + 1) * lin_slope
+            lin_slope = (x[len_x - 1] - x[0]) / (DTYPE_DATA)(len_x - 1);
+            return x[len_x - 1] + (DTYPE_DATA)(idx - len_x + 1) * lin_slope;
         case MODE_CONSTANT_EDGE:
             return x[len_x - 1];
         case MODE_ANTISYMMETRIC:

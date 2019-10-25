@@ -9,6 +9,7 @@ from functools import partial
 import sys
 
 from fast_upfirdn.cpu import upfirdn as upfirdn_cpu
+from fast_upfirdn.cpu._upfirdn import _upfirdn_modes
 from fast_upfirdn.cpu._upfirdn_apply import _output_len as upfirdn_out_len
 from fast_upfirdn._util import (
     get_array_module,
