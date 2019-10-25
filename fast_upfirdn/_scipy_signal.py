@@ -10,7 +10,12 @@ import sys
 
 from fast_upfirdn.cpu import upfirdn as upfirdn_cpu
 from fast_upfirdn.cpu._upfirdn_apply import _output_len as upfirdn_out_len
-from fast_upfirdn._util import get_array_module, have_cupy, check_device
+from fast_upfirdn._util import (
+    get_array_module,
+    have_cupy,
+    check_device,
+    profile
+)
 
 if sys.version_info >= (3, 5):
     from math import gcd
@@ -23,17 +28,19 @@ if have_cupy:
 __all__ = ["upfirdn", "upfirdn_out_len", "resample_poly"]
 
 
+@profile
 def upfirdn(
     h,
     x,
     up=1,
     down=1,
     axis=-1,
+    mode="zero",
+    cval=0,
+    *,
     xp=None,
     prepadded=False,
     out=None,
-    mode="zero",
-    cval=0,
     offset=0,
     crop=False,
     take=None,
@@ -95,15 +102,6 @@ def upfirdn(
     return y
 
 
-def _reshape_nd(x1d, ndim, axis):
-    """
-    Reshape x1d to size 1 along all axes in ``range(ndim)`` except for ``axis``.
-    """
-    shape = [1] * ndim
-    shape[axis] = x1d.size
-    return x1d.reshape(shape)
-
-
 def _resample_poly_window(up, down, window=("kaiser", 5.0)):
     """Design a linear-phase low-pass FIR filter for resample_poly."""
     from scipy.signal import firwin
@@ -148,18 +146,18 @@ def resample_poly(
         Desired window to use to design the low-pass filter, or the FIR filter
         coefficients to employ. See below for details.
     padtype : string, optional
-        `constant`, `mean` or `line`. Changes assumptions on values beyond the
-        boundary. If `constant`, assumed to be `cval` (default zero). If `line`
-        assumed to continue a linear trend defined by the first and last
-        points. `mean`, `median`, `maximum` and `minimum` work as in `np.pad` and
-        assume that the values beyond the boundary are the mean, median,
-        maximum or minimum respectively of the array along the axis.
+        `constant`, `line`, `mean`, `median`, `maximum`, `minimum` or any of
+        the other signal extension modes supported by `scipy.signal.upfirdn`.
+        Changes assumptions on values beyond the boundary. If `constant`,
+        assumed to be `cval` (default zero). If `line` assumed to continue a
+        linear trend defined by the first and last points. `mean`, `median`,
+        `maximum` and `minimum` work as in `np.pad` and assume that the values
+        beyond the boundary are the mean, median, maximum or minimum
+        respectively of the array along the axis.
 
-        .. versionadded:: 1.4.0
     cval : float, optional
         Value to use if `padtype='constant'`. Default is zero.
 
-        .. versionadded:: 1.4.0
     xp : module or None
         The array module (``cupy`` or ``numpy``). If not provided, it is
         inferred from the type of ``x``.
@@ -323,47 +321,31 @@ def resample_poly(
         "minimum": xp.amin,
         "maximum": xp.amax,
     }
-    if padtype == "constant":
-        background_line = cval
-    elif padtype in funcs:
-        background_line = [funcs[padtype](x, axis=axis), xp.asarray(0)]
-    elif padtype == "line":
-        background_line = [
-            x.take(0, axis),
-            (x.take(-1, axis) - x.take(0, axis)) * n_in / (n_in - 1),
-        ]
+    upfirdn_kwargs = {'mode': 'constant', 'cval': 0}
+    if padtype in funcs:
+        background_values = funcs[padtype](x, axis=axis, keepdims=True)
+    elif padtype in _upfirdn_modes:
+        upfirdn_kwargs = {'mode': padtype}
+        if padtype == 'constant':
+            if cval is None:
+                cval = 0
+            upfirdn_kwargs['cval'] = cval
     else:
         raise ValueError(
-            "padtype must be line, maximum, mean, median, minimum or constant"
-        )
+            'padtype must be one of: maximum, mean, median, minimum, ' +
+            ', '.join(_upfirdn_modes))
 
-    if padtype == "line" or padtype in funcs:
-        rel_len = xp.linspace(0.0, 1.0, n_in, endpoint=False)
-        rel_len_nd = _reshape_nd(rel_len, x.ndim, axis)
-        background_in = (
-            xp.expand_dims(background_line[0], axis)
-            + xp.expand_dims(background_line[1], axis) * rel_len_nd
-        )
-        x = x - background_in.astype(x.dtype)
-    elif padtype == "constant" and cval is not None:
-        x = x - cval
+    if padtype in funcs:
+        x = x - background_values
 
     # filter then remove excess
-    y = upfirdn(h, x, up, down, axis=axis, xp=xp)
+    y = upfirdn(h, x, up, down, axis=axis, xp=xp, **upfirdn_kwargs)
     keep = [slice(None)] * x.ndim
     keep[axis] = slice(n_pre_remove, n_pre_remove_end)
     y_keep = y[tuple(keep)]
 
     # Add background back
-    if padtype == "line" or padtype in funcs:
-        rel_len = xp.linspace(0.0, 1.0, n_out, endpoint=False)
-        rel_len_nd = _reshape_nd(rel_len, x.ndim, axis)
-        background_out = (
-            xp.expand_dims(background_line[0], axis)
-            + xp.expand_dims(background_line[1], axis) * rel_len_nd
-        )
-        y_keep += background_out.astype(x.dtype)
-    elif padtype == "constant" and cval is not None:
-        y_keep += cval
+    if padtype in funcs:
+        y_keep += background_values
 
     return y_keep
