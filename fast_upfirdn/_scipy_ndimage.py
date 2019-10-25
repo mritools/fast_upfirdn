@@ -134,7 +134,7 @@ def _fixup_dtypes(data, h):
 
     # convert h to the same precision as data if there is a mismatch
     if data.real.dtype != h.real.dtype:
-        if np.iscomplexobj(h):
+        if h.dtype.kind == "c":
             h_dtype = np.result_type(data.real.dtype, np.complex64)
         else:
             h_dtype = np.result_type(data.real.dtype, np.float32)
@@ -144,7 +144,7 @@ def _fixup_dtypes(data, h):
     if h.dtype != dtype_filter:
         h = h.astype(dtype_filter)
 
-    if np.iscomplexobj(h):
+    if h.dtype.kind == "c":
         # output is complex if filter is complex
         dtype_out = dtype_filter
     else:

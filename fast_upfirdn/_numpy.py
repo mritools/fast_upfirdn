@@ -70,6 +70,6 @@ def correlate(a, v, mode="valid", *, xp=None):
     """
     xp, on_gpu = get_array_module(a, xp=xp)
     v = v[::-1]
-    if xp.iscomplexobj(v):
+    if v.dtype.kind == "c":
         v = xp.conj(v)
     return convolve(a, v, mode=mode, xp=xp)

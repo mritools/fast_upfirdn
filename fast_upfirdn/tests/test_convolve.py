@@ -23,7 +23,7 @@ def test_convolve_separable_cpu_vs_gpu(shape, filter_length, dtype, mode):
     else:
         atol = rtol = 1e-10
     x = np.arange(int(np.prod(shape))).reshape(*shape).astype(dtype)
-    if np.iscomplexobj(x):
+    if x.dtype.kind == "c":
         x = x + 1j * x[::-1]
     w = np.arange(1, 1 + filter_length).astype(x.real.dtype)
 

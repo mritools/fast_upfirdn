@@ -27,9 +27,8 @@ def convolve_separable(x, w, *, xp=None, **kwargs):
 
     for ax, w0 in zip(axes, w):
         if xp == np:
-            if xp.iscomplexobj(x):
-                if not np.iscomplexobj(w0):
-                    w0 = w0.astype(np.result_type(np.float32, x.dtype))
+            if x.dtype.kind == "c" and w0.dtype.kind != "c":
+                w0 = w0.astype(np.result_type(np.float32, x.dtype))
                 tmp = ndi.convolve1d(x.real, w0.real, axis=ax, **kwargs)
                 x = tmp + 1j * ndi.convolve1d(
                     x.imag, w0.real, axis=ax, **kwargs
