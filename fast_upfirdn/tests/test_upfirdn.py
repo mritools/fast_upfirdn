@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from fast_upfirdn import upfirdn, resample_poly, correlate1d
+from fast_upfirdn.cpu._upfirdn import _upfirdn_modes
 
 cupy = pytest.importorskip("cupy")
 signal = pytest.importorskip("scipy.signal")
@@ -13,6 +14,44 @@ testing = pytest.importorskip("cupy.testing")
 
 padtype_options = ["constant", "mean", "minimum", "maximum", "line"]
 # TOOD: add median once cupy.median is implemented
+
+
+@pytest.mark.parametrize("mode", _upfirdn_modes)
+def test_extension_modes_via_convolve(mode):
+    """Test vs. manually computed results for modes not in numpy's pad."""
+for mode in _upfirdn_modes:
+    x = cupy.array([1, 2, 3, 1], dtype=float)
+    npre, npost = 6, 6
+    # use impulse response filter to probe values extending past the original
+    # array boundaries
+    h = cupy.zeros((npre + 1 + npost, ), dtype=float)
+    h[npre] = 1
+
+    if mode == 'constant':
+        cval = 5.0
+        y = upfirdn(h, x, up=1, down=1, mode=mode, cval=cval)
+    else:
+        y = upfirdn(h, x, up=1, down=1, mode=mode)
+
+    if mode == "antisymmetric":
+        y_expected = cupy.asarray(
+            [3, 1, -1, -3, -2, -1, 1, 2, 3, 1, -1, -3, -2, -1, 1, 2]
+        )
+    elif mode == "antireflect":
+        y_expected = cupy.asarray(
+            [1, 2, 3, 1, -1, 0, 1, 2, 3, 1, -1, 0, 1, 2, 3, 1]
+        )
+    elif mode == "smooth":
+        y_expected = cupy.asarray(
+            [-5, -4, -3, -2, -1, 0, 1, 2, 3, 1, -1, -3, -5, -7, -9, -11]
+        )
+    elif mode == "constant":
+        y_expected = cupy.pad(x, (npre, npost), mode=mode,
+                              constant_values=cval)
+    else:
+        y_expected = cupy.pad(x, (npre, npost), mode=mode)
+    y_expected = y_expected.astype(y.dtype)
+    cupy.testing.assert_allclose(y, y_expected)
 
 
 @pytest.mark.parametrize(

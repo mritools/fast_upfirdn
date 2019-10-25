@@ -30,6 +30,7 @@
 # LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+from math import ceil
 
 import numpy as np
 
@@ -46,6 +47,7 @@ _upfirdn_modes = [
     "reflect",
     "antisymmetric",
     "antireflect",
+    "line",  # slope based on first and last sample as used by resample_poly
 ]
 
 
@@ -100,7 +102,7 @@ class _UpFIRDn(object):
         output_shape = np.asarray(x.shape)
         if crop:
             # only compute output over roughly the original signal extent
-            output_len = int(np.ceil(x.shape[axis] * self._up / self._down))
+            output_len = int(ceil(x.shape[axis] * self._up / self._down))
         else:
             output_len = _output_len(
                 len(self._h_trans_flip), x.shape[axis], self._up, self._down
@@ -162,9 +164,14 @@ def upfirdn(
         linear filter. The filter is applied to each subarray along
         this axis. Default is -1.
     mode : str, optional
-        The signal extension mode to use.  TODO: details
+        The signal extension mode to use. The set
+        ``{'constant', 'symmetric', 'reflect', 'edge', 'wrap'}`` correspond to
+        modes provided by ``numpy.pad``. ``"smooth"`` implements a smooth
+        extension by extending based on the slope of the last 2 points at each
+        end of the array. ``"antireflect"`` and ``"antisymmetric"`` are
+        anti-symmetric versions of ``"reflect"`` and ``"symmetric"``.
     cval : float, optional
-        The constant value to use when ``mode == 'constant'`.
+        The constant value to use when ``mode == "constant"``.
 
     Returns
     -------

@@ -5,6 +5,7 @@ import numpy as np
 import cupy
 from cupy.util import memoize
 from fast_upfirdn.cpu._upfirdn_apply import mode_enum as _get_mode_enum
+from fast_upfirdn._util import profile
 
 
 try:
@@ -80,7 +81,8 @@ enum MODE {
     MODE_PERIODIC = 4,
     MODE_REFLECT = 5,
     MODE_ANTISYMMETRIC = 6,
-    MODE_ANTIREFLECT = 7
+    MODE_ANTIREFLECT = 7,
+    MODE_LINE = 8
 };
 
 
@@ -89,6 +91,7 @@ DTYPE_DATA _extend_left(DTYPE_DATA *x, long long idx, long long len_x,
                         MODE mode, DTYPE_DATA cval)
 {
     DTYPE_DATA le = 0.;
+    DTYPE_DATA lin_slope = 0.;
 
     switch(mode)
     {
@@ -128,6 +131,9 @@ DTYPE_DATA _extend_left(DTYPE_DATA *x, long long idx, long long len_x,
         return x[len_x - idx - 1];
     case MODE_SMOOTH:
         return x[0] + (DTYPE_DATA)idx * (x[1] - x[0]);
+    case MODE_LINE:
+        lin_slope = (x[len_x - 1] - x[0]) / (len_x - 1)
+        return x[0] + (DTYPE_DATA)idx * lin_slope
     case MODE_ANTISYMMETRIC:
         if ((-idx) < len_x)
         {
@@ -181,6 +187,7 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
 {
     // note: idx will be >= len_x
     DTYPE_DATA re = 0.;
+    DTYPE_DATA lin_slope = 0.;
     switch(mode)
     {
 
@@ -230,6 +237,9 @@ DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
             return x[len_x - 1] +
                    (DTYPE_DATA)(idx - len_x + 1) *
                    (x[len_x - 1] - x[len_x - 2]);
+        case MODE_LINE:
+            lin_slope = (x[len_x - 1] - x[0]) / (len_x - 1)
+            return x[len_x - 1] + (DTYPE_DATA)(idx - len_x + 1) * lin_slope
         case MODE_CONSTANT_EDGE:
             return x[len_x - 1];
         case MODE_ANTISYMMETRIC:
@@ -621,6 +631,7 @@ def _get_upfirdn_kernel_inner(
     return kern
 
 
+@profile
 def get_upfirdn_kernel(h, data, up, down):
     """Compile an upfirdn kernel based on dtype.
 
@@ -628,15 +639,15 @@ def get_upfirdn_kernel(h, data, up, down):
     """
     dtype_data, c_dtype_data = _nearest_supported_float_dtype(data.dtype)
     if data.dtype != dtype_data:
-        data = data.astype(dtype_data)
+        data = data.astype(dtype_data, copy=False)
 
     # convert h to the same precision as data if there is a mismatch
     if data.real.dtype != h.real.dtype:
-        if np.iscomplexobj(h):
+        if h.dtype.kind == "c":
             h_dtype = np.result_type(data.real.dtype, np.complex64)
         else:
             h_dtype = np.result_type(data.real.dtype, np.float32)
-        h = h.astype(h_dtype)
+        h = h.astype(h_dtype, copy=False)
 
     dtype_filter, c_dtype_filter = _nearest_supported_float_dtype(h.dtype)
     if "complex" in c_dtype_filter:
@@ -807,6 +818,7 @@ def _convolve1d(
     return y
 
 
+@profile
 def upfirdn(
     h,
     x,
@@ -862,7 +874,7 @@ def upfirdn(
         x = x.swapaxes(axis, -1)
     out_shape = [s for s in x.shape]
     if crop:
-        out_len = int(np.ceil(x.shape[-1] * up / down))
+        out_len = int(ceil(x.shape[-1] * up / down))
     else:
         out_len = _output_len(h_flip.size, x.shape[-1], up, down)
     out_shape[-1] = out_len
