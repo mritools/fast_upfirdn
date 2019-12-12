@@ -1,3 +1,4 @@
+import functools
 from math import ceil
 
 import numpy as np
@@ -579,12 +580,15 @@ c_dtypes = {
 
 
 @memoize()
-def _nearest_supported_float_dtype(dtype):
-    if dtype.char in ["f", "d", "F", "D"]:
+def _nearest_supported_float_dtype(dtype, dtype2=None):
+    if (dtype.char in ["f", "d", "F", "D"]
+            and (dtype2 is None or dtype2 == dtype)):
         return dtype, c_dtypes.get(dtype.char)
 
     # determine nearest single or double precision floating point type
-    dtype = np.result_type(dtype, np.float32)
+    dtype = np.promote_types(dtype, np.float32)
+    if dtype2 is not None:
+        dtype = np.promote_types(dtype, dtype2)
     if dtype.char == "g":
         dtype = np.dtype(np.float64)
     elif dtype.char == "G":
@@ -637,16 +641,21 @@ def get_upfirdn_kernel(h, data, up, down):
 
     Also converts h, data to the nearest supported floating point type.
     """
-    dtype_data, c_dtype_data = _nearest_supported_float_dtype(data.dtype)
+
+    # note need to include h.real.dtype here so data's dtype will be promoted
+    # if h has a higher precision dtype.
+    dtype_data, c_dtype_data = _nearest_supported_float_dtype(
+        data.dtype, h.real.dtype
+    )
     if data.dtype != dtype_data:
         data = data.astype(dtype_data, copy=False)
 
     # convert h to the same precision as data if there is a mismatch
     if data.real.dtype != h.real.dtype:
         if h.dtype.kind == "c":
-            h_dtype = np.result_type(data.real.dtype, np.complex64)
+            h_dtype = np.promote_types(dtype_data, np.complex64)
         else:
-            h_dtype = np.result_type(data.real.dtype, np.float32)
+            h_dtype = np.promote_types(dtype_data, np.float32)
         h = h.astype(h_dtype, copy=False)
 
     dtype_filter, c_dtype_filter = _nearest_supported_float_dtype(h.dtype)
@@ -825,12 +834,13 @@ def upfirdn(
     up=1,
     down=1,
     axis=-1,
+    mode="zero",
+    cval=0,
+    *,
     contiguous_output=False,
     block_size=32,
     prepadded=False,
     out=None,
-    mode="zero",
-    cval=0,
     crop=False,
     take=None,
     offset=0,
@@ -846,6 +856,13 @@ def upfirdn(
         h = cupy.asarray(h)
     if not isinstance(x, cupy.ndarray):
         x = cupy.asarray(x)
+
+    dev = cupy.cuda.Device()
+
+    if down < 1 or up < 1:
+        raise ValueError('Both up and down must be >= 1')
+    if h.ndim != 1 or h.size == 0:
+        raise ValueError('h must be 1-D with non-zero length')
 
     # compile or retrieve cached kernel for the given dtypes
     h, x, dtype_out, kern = get_upfirdn_kernel(h, x, up=up, down=down)
@@ -907,6 +924,7 @@ def upfirdn(
         out[:] = 0.0
         y = out
         inplace_output = True
+    dev.synchronize()
 
     grid_size_x = ceil(y.size / block_size)
     if grid_size_x > cuda_MaxGridDimX:
@@ -953,6 +971,7 @@ def upfirdn(
                 int(crop),
             ),
         )
+    dev.synchronize()
     y = y.reshape(out_shape, order="C")
 
     if take is not None:
