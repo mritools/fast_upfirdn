@@ -1,10 +1,9 @@
 from itertools import product
-from math import gcd
 
 import numpy as np
 import pytest
 
-from fast_upfirdn import upfirdn, resample_poly, correlate1d
+from fast_upfirdn import upfirdn
 from fast_upfirdn.cpu._upfirdn import _upfirdn_modes
 
 cupy = pytest.importorskip("cupy")
@@ -19,15 +18,14 @@ padtype_options = ["constant", "mean", "minimum", "maximum", "line"]
 @pytest.mark.parametrize("mode", _upfirdn_modes)
 def test_extension_modes_via_convolve(mode):
     """Test vs. manually computed results for modes not in numpy's pad."""
-for mode in _upfirdn_modes:
     x = cupy.array([1, 2, 3, 1], dtype=float)
     npre, npost = 6, 6
     # use impulse response filter to probe values extending past the original
     # array boundaries
-    h = cupy.zeros((npre + 1 + npost, ), dtype=float)
+    h = cupy.zeros((npre + 1 + npost,), dtype=float)
     h[npre] = 1
 
-    if mode == 'constant':
+    if mode == "constant":
         cval = 5.0
         y = upfirdn(h, x, up=1, down=1, mode=mode, cval=cval)
     else:
@@ -51,8 +49,7 @@ for mode in _upfirdn_modes:
         right = x[-1] + cupy.arange(1, npost + 1) * lin_slope
         y_expected = cupy.concatenate((left, x, right))
     elif mode == "constant":
-        y_expected = cupy.pad(x, (npre, npost), mode=mode,
-                              constant_values=cval)
+        y_expected = cupy.pad(x, (npre, npost), mode=mode, constant_values=cval)
     else:
         y_expected = cupy.pad(x, (npre, npost), mode=mode)
     y_expected = y_expected.astype(y.dtype)

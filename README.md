@@ -1,19 +1,25 @@
 # separable n-dimensional convolution using CuPy
 
 The core low-level function implemented here is an equivalent of
-scipy.signal.upfirdn but with support for both CPU (via [NumPy]) and GPU
+``scipy.signal.upfirdn`` but with support for both CPU (via [NumPy]) and GPU
 (via [CuPy]).
 
 This function can be used to implement a wide variety of separable
 convolution-based filtering operations on n-dimensional arrays. A subset of
-functions from scipy.signal, scipy.ndimage and scikit-image built on top of
-fast-upfirdn are provided in the [cupyext] library.
+functions from ``scipy.signal``, ``scipy.ndimage`` and ``scikit-image`` built
+on top of fast-upfirdn are provided in the [cupyext] library.
+
+The version of ``upfirdn`` here supports several signal extension modes. These
+have been contributed upstream to SciPy and are available there for SciPy 1.4+.
+A few additional keyword-only arguments are present in the present
+implementation that do not exist in SciPy. These should be considered
+experimental and subject to change.
 
 **Requires:**
 
 - [NumPy]
 - [CuPy]  (>=6.1)
-- [SciPy] (>=0.19)
+- [SciPy]  (>=0.19)
 
 Optional (for testing/development):
 

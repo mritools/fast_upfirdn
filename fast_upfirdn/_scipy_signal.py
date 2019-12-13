@@ -14,7 +14,7 @@ from fast_upfirdn._util import (
     get_array_module,
     have_cupy,
     check_device,
-    profile
+    profile,
 )
 
 if have_cupy:

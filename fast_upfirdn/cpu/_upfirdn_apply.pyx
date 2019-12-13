@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # Code adapted from "upfirdn" python library with permission:
 #
 # Copyright (c) 2009, Motorola, Inc
@@ -32,6 +30,13 @@
 # LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+# Additional boundary handling modes were adapted from PyWavelets by
+# Gregory R. Lee. These are also present in SciPy 1.4+.
+
+# A fast path for the up=down=1 case was also added here that does not
+# currently exist in SciPy.
+# Additional arguments origin & crop are also not presently available in SciPy.
 
 cimport cython
 cimport numpy as np

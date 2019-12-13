@@ -1,4 +1,8 @@
-import functools
+"""GPU Implementation of upfirdn.
+
+A separate implementation "convolve1d" is also provided as a somewhat faster
+alternative in the case up=down=1 (i.e. standard convolution).
+"""
 from math import ceil
 
 import numpy as np
@@ -18,6 +22,8 @@ except (cupy.cuda.runtime.CUDARuntimeError, AttributeError):
     # guess
     cuda_MaxBlockDimX = 1024
     cuda_MaxGridDimX = 2147483647
+
+__all__ = ["convolve1d", "upfirdn"]
 
 
 def _output_len(len_h, in_len, up, down):
@@ -581,8 +587,9 @@ c_dtypes = {
 
 @memoize()
 def _nearest_supported_float_dtype(dtype, dtype2=None):
-    if (dtype.char in ["f", "d", "F", "D"]
-            and (dtype2 is None or dtype2 == dtype)):
+    if dtype.char in ["f", "d", "F", "D"] and (
+        dtype2 is None or dtype2 == dtype
+    ):
         return dtype, c_dtypes.get(dtype.char)
 
     # determine nearest single or double precision floating point type
@@ -712,7 +719,7 @@ def _pad_h(h, up):
     return h_full
 
 
-def _convolve1d(
+def convolve1d(
     h,
     x,
     axis=-1,
@@ -860,9 +867,9 @@ def upfirdn(
     dev = cupy.cuda.Device()
 
     if down < 1 or up < 1:
-        raise ValueError('Both up and down must be >= 1')
+        raise ValueError("Both up and down must be >= 1")
     if h.ndim != 1 or h.size == 0:
-        raise ValueError('h must be 1-D with non-zero length')
+        raise ValueError("h must be 1-D with non-zero length")
 
     # compile or retrieve cached kernel for the given dtypes
     h, x, dtype_out, kern = get_upfirdn_kernel(h, x, up=up, down=down)
