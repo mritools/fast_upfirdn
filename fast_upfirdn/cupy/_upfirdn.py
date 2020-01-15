@@ -15,7 +15,7 @@ from fast_upfirdn._util import profile
 
 try:
     # Device Attributes require CuPy > 6.0.b3
-    d = cupy.cuda.device.Device(0)
+    d = cupy.cuda.device.Device()
     cuda_MaxBlockDimX = d.attributes["MaxBlockDimX"]
     cuda_MaxGridDimX = d.attributes["MaxGridDimX"]
 except (cupy.cuda.runtime.CUDARuntimeError, AttributeError):
@@ -642,47 +642,66 @@ def _get_upfirdn_kernel_inner(
     return kern
 
 
+@memoize()
+def _determine_dtypes(data_dtype, data_real_dtype, h_dtype, h_real_dtype):
+    # note need to include h_real_dtype here so data's dtype will be promoted
+    # if h has a higher precision dtype.
+    dtype_data, c_dtype_data = _nearest_supported_float_dtype(
+        data_dtype, h_real_dtype
+    )
+    if data_dtype == h_dtype:
+        dtype_out = dtype_filter = dtype_data
+        c_dtype_out = c_dtype_filter = c_dtype_data
+    else:
+        # convert h to the same precision as data if there is a mismatch
+        cplx_h = h_dtype.kind == "c"
+        if data_real_dtype != h_real_dtype:
+            if cplx_h:
+                h_dtype = np.promote_types(dtype_data, np.complex64)
+            else:
+                h_dtype = np.promote_types(dtype_data, np.float32)
+
+        dtype_filter, c_dtype_filter = _nearest_supported_float_dtype(h_dtype)
+        if cplx_h:
+            # output is complex if filter is complex
+            c_dtype_out = c_dtype_filter
+            dtype_out = dtype_filter
+        else:
+            # for real filter, output dtype matches the data dtype
+            c_dtype_out = c_dtype_data
+            dtype_out = dtype_data
+    return (
+        dtype_data,
+        c_dtype_data,
+        dtype_filter,
+        c_dtype_filter,
+        dtype_out,
+        c_dtype_out,
+    )
+
+
 @profile
 def get_upfirdn_kernel(h, data, up, down):
     """Compile an upfirdn kernel based on dtype.
 
     Also converts h, data to the nearest supported floating point type.
     """
-
-    # note need to include h.real.dtype here so data's dtype will be promoted
-    # if h has a higher precision dtype.
-    dtype_data, c_dtype_data = _nearest_supported_float_dtype(
-        data.dtype, h.real.dtype
+    dt_data, c_dt_data, dt_h, c_dt_h, dt_out, c_dt_out = _determine_dtypes(
+        data.dtype, data.real.dtype, h.dtype, h.real.dtype
     )
-    if data.dtype != dtype_data:
-        data = data.astype(dtype_data, copy=False)
 
-    # convert h to the same precision as data if there is a mismatch
-    if data.real.dtype != h.real.dtype:
-        if h.dtype.kind == "c":
-            h_dtype = np.promote_types(dtype_data, np.complex64)
-        else:
-            h_dtype = np.promote_types(dtype_data, np.float32)
-        h = h.astype(h_dtype, copy=False)
+    if data.dtype != dt_data:
+        data = data.astype(dt_data)
 
-    dtype_filter, c_dtype_filter = _nearest_supported_float_dtype(h.dtype)
-    if "complex" in c_dtype_filter:
-        # output is complex if filter is complex
-        c_dtype_out = c_dtype_filter
-        dtype_out = dtype_filter
-    else:
-        # for real filter, output dtype matches the data dtype
-        c_dtype_out = c_dtype_data
-        dtype_out = dtype_data
-    if h.dtype != dtype_filter:
-        h = h.astype(dtype_filter)
+    if h.dtype != dt_h:
+        h = h.astype(dt_h)
 
     # memoized GPU kernels
     kern = _get_upfirdn_kernel_inner(
-        up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h.size
+        up, down, c_dt_data, c_dt_h, c_dt_out, h.size
     )
 
-    return h, data, dtype_out, kern
+    return h, data, dt_out, kern
 
 
 def _pad_h(h, up):
@@ -864,7 +883,7 @@ def upfirdn(
     if not isinstance(x, cupy.ndarray):
         x = cupy.asarray(x)
 
-    dev = cupy.cuda.Device()
+    # dev = cupy.cuda.Device()
 
     if down < 1 or up < 1:
         raise ValueError("Both up and down must be >= 1")
@@ -886,10 +905,6 @@ def upfirdn(
         h_flip = _pad_h(h, up=up)
 
     len_h = len(h_flip)
-    # if len_h > 128:
-    #     raise ValueError(
-    #         "CUDA implementation currently assumes filter length is <= 128."
-    #     )
 
     if axis < -ndim or axis > ndim - 1:
         raise ValueError("axis out of range")
@@ -931,7 +946,6 @@ def upfirdn(
         out[:] = 0.0
         y = out
         inplace_output = True
-    dev.synchronize()
 
     grid_size_x = ceil(y.size / block_size)
     if grid_size_x > cuda_MaxGridDimX:
@@ -978,7 +992,6 @@ def upfirdn(
                 int(crop),
             ),
         )
-    dev.synchronize()
     y = y.reshape(out_shape, order="C")
 
     if take is not None:
