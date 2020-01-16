@@ -39,14 +39,14 @@ development.
 This package is in the early stages of development and does not yet have
 binary wheels. Source packages are available on PyPI.
 
-```Python
+```
 pip install fast_upfirdn
 ```
 
 Developers can download the source from GitHub, navigate to the source
 directory and run:
 
-```Python
+```
 python -m pip install -e . -v  --no-build-isolation --no-use-pep517
 ```
 
