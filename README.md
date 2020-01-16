@@ -1,7 +1,7 @@
 # separable n-dimensional convolution using CuPy
 
 The core low-level function implemented here is an equivalent of
-``scipy.signal.upfirdn`` but with support for both CPU (via [NumPy]) and GPU
+[scipy.signal.upfirdn] but with support for both CPU (via [NumPy]) and GPU
 (via [CuPy]). It can be installed without SciPy itself.
 
 This package can still be installed without CuPy, but only the CPU-based
