@@ -101,7 +101,7 @@ The [RAPIDS] project [cuSignal] provides a more comprehensive implementation
 of functions from ``scipy.signal``. Like ``fast_upfirdn``, it also depends on
 [CuPy], but has an additional dependency on [Numba].
 
-On advantage of this repository is that it supports the new boundary handling
+One advantage of this repository is that it supports the new boundary handling
 modes introduced for ``upfirdn`` in SciPy 1.4, while at the time of writing
 (Jan 2019), [cuSignal] does not.
 
