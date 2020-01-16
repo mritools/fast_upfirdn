@@ -1,4 +1,4 @@
-# separable n-dimensional convolution using CuPy
+# separable n-dimensional convolution on the CPU and GPU
 
 The core low-level function implemented here is an equivalent of
 [scipy.signal.upfirdn] but with support for both CPU (via [NumPy]) and GPU
@@ -19,6 +19,7 @@ experimental and subject to change.
 **Requires:**
 
 - [NumPy]  (>=1.14)
+- [Cython]  (>=0.29.13)  (needed during build, not at runtime)
 
 **Recommended:**
 
