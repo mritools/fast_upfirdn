@@ -35,6 +35,52 @@ the source directory and run:
 pip install . -v
 `
 
+**Usage:**
+
+
+The primary function provided by this package is `upfirdn`:
+
+The top-level ``upfirdn`` autoselects CPU or GPU (CUDA) execution based on
+whether the input data was a NumPy or CuPy array.
+
+
+The following will run on the CPU because the inputs are NumPy arrays
+```Python
+import numpy as np
+import fast_upfirdn
+
+x = np.arange(8)
+h = np.ones(3)
+
+fast_upfirdn.upfirdn(x, h, up=1, down=2)
+```
+
+The following will run on the GPU because the inputs are CuPy arrays
+```Python
+import cupy as cp
+x_d = cp.arange(8)
+h_d = cp.ones(3)
+fast_upfirdn.upfirdn(x_d, h_d, up=1, down=2)
+```
+
+Alternatively the CPU version can be called directly as
+``fast_upfirdn.cpu.upfirdn``
+
+```Python
+fast_upfirdn.cpu.upfirdn(x, h, up=1, down=2)
+```
+
+Or the GPU version can be called specifically as ``fast_upfirdn.cupy.upfirdn``
+```Python
+fast_upfirdn.cupy.upfirdn(x_d, h_d, up=1, down=2)
+```
+
+On the GPU there is also a faster code path for the case up=1, down=1 that
+can be called via
+```Python
+fast_upfirdn.cupy.convolve1d(x_d, h_d)
+```
+
 ## Similar Software
 
 The [RAPIDS] project [cuSignal] provides a more comprehensive implementation

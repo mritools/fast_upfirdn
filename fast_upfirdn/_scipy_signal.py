@@ -66,14 +66,12 @@ def upfirdn(
         TODO
     take : int or None, optional
         TODO
-
-
     """
 
     # If xp was unspecified, determine it from x
     xp, on_gpu = get_array_module(x, xp)
 
-    # make sure both arrays are on the CPU when xp=numpy or GPU when xp=cupy
+    # make sure both arrays are on the CPU when xp==numpy or GPU when xp==cupy
     x, h = map(partial(check_device, xp=xp), [x, h])
 
     upfirdn_kwargs = dict(
