@@ -201,7 +201,7 @@ def upfirdn(
     --------
     Simple operations:
 
-    >>> from scipy.signal import upfirdn
+    >>> from fast_upfirdn.cpu import upfirdn
     >>> upfirdn([1, 1, 1], [1, 1, 1])   # FIR filter
     array([ 1.,  2.,  3.,  2.,  1.])
     >>> upfirdn([1], [1, 2, 3], 3)  # upsampling with zeros insertion

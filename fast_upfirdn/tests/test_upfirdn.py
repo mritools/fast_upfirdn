@@ -15,6 +15,7 @@ padtype_options = ["constant", "mean", "minimum", "maximum", "line"]
 # TOOD: add median once cupy.median is implemented
 
 
+@cupy.testing.with_requires("cupy>=7.0")
 @pytest.mark.parametrize("mode", _upfirdn_modes)
 def test_extension_modes_via_convolve(mode):
     """Test vs. manually computed results for modes not in numpy's pad."""

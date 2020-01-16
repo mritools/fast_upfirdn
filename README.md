@@ -2,28 +2,36 @@
 
 The core low-level function implemented here is an equivalent of
 ``scipy.signal.upfirdn`` but with support for both CPU (via [NumPy]) and GPU
-(via [CuPy]).
+(via [CuPy]). It can be installed without SciPy itself.
+
+This package can still be installed without CuPy, but only the CPU-based
+implementation will be avialable.
 
 This function can be used to implement a wide variety of separable
-convolution-based filtering operations on n-dimensional arrays. A subset of
-functions from ``scipy.signal``, ``scipy.ndimage`` and ``scikit-image`` built
-on top of fast-upfirdn are provided in the [cupyext] library.
+convolution-based filtering operations on n-dimensional arrays.
 
 The version of ``upfirdn`` here supports several signal extension modes. These
 have been contributed upstream to SciPy and are available there for SciPy 1.4+.
-A few additional keyword-only arguments are present in the present
-implementation that do not exist in SciPy. These should be considered
+A few additional keyword-only arguments are present in the ``upfirdn``
+implementation here that do not exist in SciPy. These should be considered
 experimental and subject to change.
 
 **Requires:**
 
-- [NumPy]
-- [CuPy]  (>=6.1)
-- [SciPy]  (>=0.19)
+- [NumPy]  (>=1.14)
 
-Optional (for testing/development):
+**Recommended:**
+
+- [CuPy]  (>=6.1)
+
+**To run the test suite, users will also need:**
 
 - [pytest]
+- [SciPy]  (>=1.0.1)
+
+
+See ``requirements-dev.txt`` for any additional requirements needed for
+development.
 
 **Installation:**
 
@@ -75,8 +83,8 @@ Or the GPU version can be called specifically as ``fast_upfirdn.cupy.upfirdn``
 fast_upfirdn.cupy.upfirdn(x_d, h_d, up=1, down=2)
 ```
 
-On the GPU there is also a faster code path for the case up=1, down=1 that
-can be called via
+On the GPU there is also a faster code path for the case ``up=1, down=1`` that
+can be called via ``fast_upfirdn.cupy.convolve1d``
 ```Python
 fast_upfirdn.cupy.convolve1d(x_d, h_d)
 ```
@@ -84,14 +92,16 @@ fast_upfirdn.cupy.convolve1d(x_d, h_d)
 ## Similar Software
 
 The [RAPIDS] project [cuSignal] provides a more comprehensive implementation
-of functions from scipy.signal. Like [cupyext], it also depends on [CuPy], but
-has an additional dependency on [Numba]. One other difference is at the time of
-writing, it does not support all of the new boundary handling modes introduced
-in SciPy 1.4.
+of functions from ``scipy.signal``. Like [cupyext], it also depends on [CuPy],
+but has an additional dependency on [Numba].
+
+On advantage of this repository is that it supports the new boundary handling
+modes introduced for ``upfirdn`` in SciPy 1.4, while at the time of writing
+(Jan 2019), [cuSignal] does not.
+
 
 [conda]: https://docs.conda.io/en/latest/
 [CuPy]: https://cupy.chainer.org
-[cupyext]: https://github.com/grlee77/cupyext
 [cuSignal]: https://github.com/rapidsai/cusignal
 [Numba]: numba.pydata.org
 [NumPy]: https://numpy.org/

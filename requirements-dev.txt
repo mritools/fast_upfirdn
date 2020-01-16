@@ -1,4 +1,4 @@
-scipy>=1.2.0
+scipy>=1.0.1
 pytest
 pytest-cov
 flake8
