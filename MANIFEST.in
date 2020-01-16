@@ -1,0 +1,22 @@
+include setup.py
+include setup.cfg
+include pyproject.toml
+include README.md
+include LICENSE.txt
+include LICENSES_bundled.txt
+include *.txt
+include MANIFEST.in
+include Makefile
+
+# All source files
+recursive-include fast_upfirdn *
+recursive-include demo *
+recursive-include doc *
+
+# Exclude what we don't want to include
+prune build
+prune doc/build
+prune */__pycache__
+
+global-exclude *.py[cod] *.egg *.egg-info
+global-exclude *~ *.bak *.swp
