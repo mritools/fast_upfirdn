@@ -98,8 +98,8 @@ fast_upfirdn.cupy.convolve1d(x_d, h_d)
 ## Similar Software
 
 The [RAPIDS] project [cuSignal] provides a more comprehensive implementation
-of functions from ``scipy.signal``. Like [cupyext], it also depends on [CuPy],
-but has an additional dependency on [Numba].
+of functions from ``scipy.signal``. Like ``fast_upfirdn``, it also depends on
+[CuPy], but has an additional dependency on [Numba].
 
 On advantage of this repository is that it supports the new boundary handling
 modes introduced for ``upfirdn`` in SciPy 1.4, while at the time of writing
