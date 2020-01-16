@@ -35,16 +35,21 @@ development.
 
 **Installation:**
 
-This package is in the early stages of development and is not yet available via
-[PyPI] or [conda]. Users can download the source from GitHub, navigate to
-the source directory and run:
+This package is in the early stages of development and does not yet have
+binary wheels. Source packages are available on PyPI.
 
-`Python
-pip install . -v
-`
+```Python
+pip install fast_upfirdn
+```
+
+Developers can download the source from GitHub, navigate to the source
+directory and run:
+
+```Python
+python -m pip install -e . -v  --no-build-isolation --no-use-pep517
+```
 
 **Usage:**
-
 
 The primary function provided by this package is `upfirdn`:
 
