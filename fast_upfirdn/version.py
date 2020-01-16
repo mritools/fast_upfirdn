@@ -69,6 +69,6 @@ MAJOR = _version_major
 MINOR = _version_minor
 MICRO = _version_micro
 VERSION = __version__
-PACKAGE_DATA = {"fast_upfirdn": [pjoin("data", "*")]}
+PACKAGE_DATA = {"fast_upfirdn": [pjoin("data", "*"), pjoin("tests", "*")]}
 REQUIRES = ["numpy", "cython"]
 PYTHON_REQUIRES = ">= 3.6"
