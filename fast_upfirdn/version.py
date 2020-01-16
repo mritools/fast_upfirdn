@@ -33,8 +33,8 @@ long_description = """
 Fast Upfirdn
 ============
 The core low-level function implemented here is an equivalent of
-``scipy.signal.upfirdn`` but with support for both CPU (via [NumPy]) and GPU
-(via [CuPy]).
+``scipy.signal.upfirdn`` but with support for both CPU (via NumPy) and GPU
+(via CuPy).
 
 The version of ``upfirdn`` here supports several signal extension modes. These
 have been contributed upstream to SciPy and are available there for SciPy 1.4+.
