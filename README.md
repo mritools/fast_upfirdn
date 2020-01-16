@@ -110,3 +110,4 @@ modes introduced for ``upfirdn`` in SciPy 1.4, while at the time of writing
 [RAPIDS]: https://rapids.ai
 [SciPy]: https://scipy.org
 [scikit-image]: https://scikit-image.org
+[scipy.signal.upfirdn]: https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.upfirdn.html
