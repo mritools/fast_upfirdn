@@ -46,41 +46,41 @@ _include = r"""
 #else
     // atomicAdd for doubles didn't exist prior to compute capability 6.0
     __device__ double atomicAdd(double* address, double val)
-    {
+    {{
         unsigned long long int* address_as_ull =
                                  (unsigned long long int*)address;
         unsigned long long int old = *address_as_ull, assumed;
-        do {
+        do {{
             assumed = old;
             old = atomicCAS(address_as_ull, assumed,
                             __double_as_longlong(val +
                                 __longlong_as_double(assumed)));
-        } while (assumed != old);
+        }} while (assumed != old);
         return __longlong_as_double(old);
-    }
+    }}
 #endif
 
 // atomicAdd for complex floats via two real-valued atomicAdds
 
 __device__ complex<float> atomicAdd(complex<float>* address,
                                     complex<float> val)
-{
+{{
     float *p = reinterpret_cast<float *>(address);
 
     return complex<float>(atomicAdd(p, val.real()),
                           atomicAdd(p + 1, val.imag()));
-}
+}}
 
 __device__ complex<double> atomicAdd(complex<double>* address,
                                      complex<double> val)
-{
+{{
     double *p = reinterpret_cast<double *>(address);
 
     return complex<double>(atomicAdd(p, val.real()),
                            atomicAdd(p + 1, val.imag()));
-}
+}}
 
-enum MODE {
+enum MODE {{
     MODE_CONSTANT = 0,
     MODE_SYMMETRIC = 1,
     MODE_CONSTANT_EDGE = 2,
@@ -90,26 +90,26 @@ enum MODE {
     MODE_ANTISYMMETRIC = 6,
     MODE_ANTIREFLECT = 7,
     MODE_LINE = 8
-};
+}};
 
 
 __device__
-DTYPE_DATA _extend_left(DTYPE_DATA *x, long long idx, long long len_x,
-                        MODE mode, DTYPE_DATA cval)
-{
-    DTYPE_DATA le = 0.;
-    DTYPE_DATA lin_slope = 0.;
+{dtype_data} _extend_left({dtype_data} *x, {dtype_index} idx, {dtype_index} len_x,
+                        MODE mode, {dtype_data} cval)
+{{
+    {dtype_data} le = 0.;
+    {dtype_data} lin_slope = 0.;
 
     switch(mode)
-    {
+    {{
     // note: idx will be < 0
     case MODE_SYMMETRIC:
         if ((-idx) < len_x)
-        {
+        {{
             return x[-idx - 1];
-        }
+        }}
         else
-        {
+        {{
             // general case for multiple reflections:
             // the pattern repeats with periodicity 2*len_x;
             idx = (-idx - 1) % (2 * len_x);
@@ -117,14 +117,14 @@ DTYPE_DATA _extend_left(DTYPE_DATA *x, long long idx, long long len_x,
                 return x[idx];
             else
                 return x[len_x - 1 - (idx - len_x)];
-        }
+        }}
     case MODE_REFLECT:
         if ((-idx) < (len_x - 1))
-        {
+        {{
             return x[-idx];
-        }
+        }}
         else
-        {
+        {{
             // general case for multiple reflections:
             // the pattern repeats with periodicity 2*(len_x - 1);
             idx = (-idx - 1) % (2 * (len_x - 1));
@@ -132,168 +132,168 @@ DTYPE_DATA _extend_left(DTYPE_DATA *x, long long idx, long long len_x,
                 return x[idx + 1];
             else
                 return x[len_x - 2 - (idx - (len_x - 1))];
-        }
+        }}
     case MODE_PERIODIC:
         idx = (-idx - 1) % len_x;
         return x[len_x - idx - 1];
     case MODE_SMOOTH:
-        return x[0] + (DTYPE_DATA)idx * (x[1] - x[0]);
+        return x[0] + ({dtype_data})idx * (x[1] - x[0]);
     case MODE_LINE:
-        lin_slope = (x[len_x - 1] - x[0]) / (DTYPE_DATA)(len_x - 1);
-        return x[0] + (DTYPE_DATA)idx * lin_slope;
+        lin_slope = (x[len_x - 1] - x[0]) / ({dtype_data})(len_x - 1);
+        return x[0] + ({dtype_data})idx * lin_slope;
     case MODE_ANTISYMMETRIC:
         if ((-idx) < len_x)
-        {
+        {{
             return -x[-idx - 1];
-        }
+        }}
         else
-        {
+        {{
             idx = (-idx - 1) % (2 * len_x);
             if (idx < len_x)
-            {
+            {{
                 return -x[idx];
-            }
+            }}
             else
-            {
+            {{
                 return x[len_x - 1 - (idx - len_x)];
-            }
-        }
+            }}
+        }}
     case MODE_ANTIREFLECT:
         if ((-idx) < len_x)
-        {
+        {{
             return x[0] - (x[-idx] - x[0]);
-        }
+        }}
         else
-        {
+        {{
             le = x[0] + (x[0] - x[len_x - 1]) *
-                 ((DTYPE_DATA)((-(idx) - 1) / (len_x - 1)));
+                 (({dtype_data})((-(idx) - 1) / (len_x - 1)));
             idx = (-idx - 1) % (2 * (len_x - 1));
             if (idx < (len_x - 1))
-            {
+            {{
                 return le - (x[idx + 1] - x[0]);
-            }
+            }}
             else
-            {
+            {{
                 return le - (
                     x[len_x - 1] - x[len_x - 2 - (idx - (len_x - 1))]);
-            }
-        }
+            }}
+        }}
     case MODE_CONSTANT_EDGE:
         return x[0];
     case MODE_CONSTANT:
         return cval;
     default:
         return -1.;
-    }
-}
+    }}
+}}
 
 
 __device__
-DTYPE_DATA _extend_right(DTYPE_DATA *x, long long idx, long long len_x,
-                           MODE mode, DTYPE_DATA cval)
-{
+{dtype_data} _extend_right({dtype_data} *x, {dtype_index} idx, {dtype_index} len_x,
+                           MODE mode, {dtype_data} cval)
+{{
     // note: idx will be >= len_x
-    DTYPE_DATA re = 0.;
-    DTYPE_DATA lin_slope = 0.;
+    {dtype_data} re = 0.;
+    {dtype_data} lin_slope = 0.;
     switch(mode)
-    {
+    {{
 
         case MODE_SYMMETRIC:
-        {
+        {{
             if (idx < (2 * len_x))
-            {
+            {{
                 return x[len_x - 1 - (idx - len_x)];
-            }
+            }}
             else
-            {
+            {{
                 idx = idx % (2 * len_x);
                 if (idx < len_x)
-                {
+                {{
                     return x[idx];
-                }
+                }}
                 else
-                {
+                {{
                     return x[len_x - 1 - (idx - len_x)];
-                }
-            }
-        }
+                }}
+            }}
+        }}
         case MODE_REFLECT:
-        {
+        {{
             if (idx < (2 * len_x - 1))
-            {
+            {{
                 return x[len_x - 2 - (idx - len_x)];
-            }
+            }}
             else
-            {
+            {{
                 idx = idx % (2 * (len_x - 1));
                 if (idx < (len_x - 1))
-                {
+                {{
                     return x[idx];
-                }
+                }}
                 else
-                {
+                {{
                     return x[len_x - 1 - (idx - (len_x - 1))];
-                }
-            }
-        }
+                }}
+            }}
+        }}
         case MODE_PERIODIC:
-        {
+        {{
             return x[idx % len_x];
-        }
+        }}
         case MODE_SMOOTH:
             return x[len_x - 1] +
-                   (DTYPE_DATA)(idx - len_x + 1) *
+                   ({dtype_data})(idx - len_x + 1) *
                    (x[len_x - 1] - x[len_x - 2]);
         case MODE_LINE:
-            lin_slope = (x[len_x - 1] - x[0]) / (DTYPE_DATA)(len_x - 1);
-            return x[len_x - 1] + (DTYPE_DATA)(idx - len_x + 1) * lin_slope;
+            lin_slope = (x[len_x - 1] - x[0]) / ({dtype_data})(len_x - 1);
+            return x[len_x - 1] + ({dtype_data})(idx - len_x + 1) * lin_slope;
         case MODE_CONSTANT_EDGE:
             return x[len_x - 1];
         case MODE_ANTISYMMETRIC:
             if (idx < (2 * len_x))
-            {
+            {{
                 return -x[len_x - 1 - (idx - len_x)];
-            }
+            }}
             else
-            {
+            {{
                 idx = idx % (2 * len_x);
                 if (idx < len_x)
-                {
+                {{
                     return x[idx];
-                }
+                }}
                 else
-                {
+                {{
                     return -x[len_x - 1 - (idx - len_x)];
-                }
-            }
+                }}
+            }}
         case MODE_ANTIREFLECT:
             if (idx < (2 * len_x - 1))
-            {
+            {{
                 return x[len_x - 1] - (
                     x[len_x - 2 - (idx - len_x)] - x[len_x - 1]);
-            }
+            }}
             else
-            {
+            {{
                 re = x[len_x - 1] +
                      (x[len_x - 1] - x[0]) *
-                     ((DTYPE_DATA)(idx / (len_x - 1) - 1));
+                     (({dtype_data})(idx / (len_x - 1) - 1));
                 idx = idx % (2 * (len_x - 1));
                 if (idx < (len_x - 1))
-                {
+                {{
                     return re + (x[idx] - x[0]);
-                }
+                }}
                 else
-                {
+                {{
                     return re + (x[len_x - 1] -
                                  x[len_x - 1 - (idx - (len_x - 1))]);
-                }
-            }
+                }}
+            }}
         case MODE_CONSTANT:
             return cval;
         default:
             return -1.;
-    }
-}
+    }}
+}}
 
 """
 
@@ -302,172 +302,173 @@ _convolved_batch_template = (
     _include
     + r"""
 
-extern "C" {
+extern "C" {{
 
 __global__
-void _apply_batch(DTYPE_DATA *x, long long len_x,
-               DTYPE_FILTER *h_trans_flip,
-               long long len_h,
-               DTYPE_OUT *out,
-               long long out_axis_size,
-               long long nbatch,
-               long long _mode,
-               DTYPE_DATA cval,
-               long long offset,
-               long long crop)
-{
-    __shared__ DTYPE_FILTER h_trans_flip_s[128];
-    long long x_conv_idx;
-    long long i;
+void _apply_batch({dtype_data} *x, {dtype_index} len_x,
+               {dtype_filter} *h_trans_flip,
+               {dtype_index} len_h,
+               {dtype_out} *out,
+               {dtype_index} out_axis_size,
+               {dtype_index} nbatch,
+               int _mode,
+               {dtype_data} cval,
+               int offset,
+               int crop)
+{{
+    __shared__ {dtype_filter} h_trans_flip_s[128];
+    {dtype_index} x_conv_idx;
+    {dtype_index} i;
     // TODO: set initial values for these constants outside the loop
-    long long unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
-    long long batch_idx = unraveled_idx / out_axis_size;
+    {dtype_index} unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
+    {dtype_index} batch_idx = unraveled_idx / out_axis_size;
     MODE mode = (MODE)_mode;
 
     for (i=0; i<len_h; i++)
-    {
+    {{
         h_trans_flip_s[i] = h_trans_flip[i];
-    }
+    }}
 
     if (batch_idx < nbatch)
-    {
-        long long padded_len;
-        long long offset_x = batch_idx * len_x;
-        long long offset_out = batch_idx * out_axis_size;
+    {{
+        {dtype_index} padded_len;
+        {dtype_index} offset_x = batch_idx * len_x;
+        {dtype_index} offset_out = batch_idx * out_axis_size;
 
-        long long y_idx = unraveled_idx - offset_out;
-        long long h_idx = 0;
-        long long x_idx = y_idx + offset;
+        {dtype_index} y_idx = unraveled_idx - offset_out;
+        {dtype_index} h_idx = 0;
+        {dtype_index} x_idx = y_idx + offset;
 
-        DTYPE_OUT val = 0.0;
-        DTYPE_OUT xval;
+        {dtype_out} val = 0.0;
+        {dtype_out} xval;
 
         bool zpad = (mode == MODE_CONSTANT) && (abs(cval) == 0.0);
 
         if (crop)
-        {
+        {{
             padded_len = len_x + offset;
-        }
+        }}
         else
-        {
+        {{
             padded_len = len_x + len_h - 1 + offset;
-        }
+        }}
 
         if (x_idx < len_x)
-        {
+        {{
             x_conv_idx = x_idx - len_h + 1;
-            if (x_conv_idx < 0){
+            if (x_conv_idx < 0)
+            {{
                 if (zpad)
-                {
+                {{
                     h_idx -= x_conv_idx;
-                }
+                }}
                 else
-                {
-                    for (; x_conv_idx < 0; x_conv_idx++){
+                {{
+                    for (; x_conv_idx < 0; x_conv_idx++){{
                         xval = _extend_left(
                             &x[offset_x], x_conv_idx, len_x, mode, cval);
                         val += xval * h_trans_flip_s[h_idx];
                         h_idx++;
-                    }
-                }
+                    }}
+                }}
                 x_conv_idx = 0;
-            }
-            for (; x_conv_idx < x_idx + 1; x_conv_idx++){
+            }}
+            for (; x_conv_idx < x_idx + 1; x_conv_idx++){{
                 val += x[offset_x + x_conv_idx] * h_trans_flip_s[h_idx];
                 h_idx++;
-            }
+            }}
             atomicAdd(&out[unraveled_idx], val);
-        }
+        }}
 
         // Use a second simplified loop to flush out the last bits
         else if (x_idx < padded_len)
-        {
+        {{
             x_conv_idx = x_idx - len_h + 1;
             for (; x_conv_idx < x_idx + 1; x_conv_idx++)
-            {
+            {{
                 if (x_conv_idx >= len_x)
-                {
+                {{
                     xval = _extend_right(
                         &x[offset_x], x_conv_idx, len_x, mode, cval);
-
-                }
+                }}
                 else if (x_conv_idx < 0)
-                {
+                {{
                     xval = _extend_left(
                         &x[offset_x], x_conv_idx, len_x, mode, cval);
-                }
+                }}
                 else
-                {
+                {{
                     xval = x[offset_x + x_conv_idx];
-                }
+                }}
                 val += xval * h_trans_flip_s[h_idx];
                 h_idx++;
-            }
+            }}
             atomicAdd(&out[unraveled_idx], val);
-        }
-    }
-}
-}
+        }}
+    }}
+}}
+}}
 """
 )
 
 
 _upfirdn_part1_shared_h = r"""
 
-extern "C" {
+extern "C" {{
 
 __global__
-void _apply_batch(DTYPE_DATA *x, long long len_x,
-                  DTYPE_FILTER *h_trans_flip,
-                  long long len_h,
-                  DTYPE_OUT *out,
-                  long long up,
-                  long long down,
-                  long long out_axis_size,
-                  long long nbatch,
-                  long long _mode,
-                  DTYPE_DATA cval,
-                  long long offset,
-                  long long crop)
-{
-    __shared__ DTYPE_FILTER h_trans_flip_s[128];
-    long long x_conv_idx;
-    long long i;
+void _apply_batch({dtype_data} *x, {dtype_index} len_x,
+                  {dtype_filter} *h_trans_flip,
+                  {dtype_index} len_h,
+                  {dtype_out} *out,
+                  int up,
+                  int down,
+                  {dtype_index} out_axis_size,
+                  {dtype_index} nbatch,
+                  int _mode,
+                  {dtype_data} cval,
+                  int offset,
+                  int crop)
+{{
+    __shared__ {dtype_filter} h_trans_flip_s[128];
+    {dtype_index} x_conv_idx;
+    {dtype_index} i;
     // TODO: set initial values for these constants outside the loop
-    long long unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
-    long long batch_idx = unraveled_idx / out_axis_size;
+    {dtype_index} unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
+    {dtype_index} batch_idx = unraveled_idx / out_axis_size;
     MODE mode = (MODE)_mode;
 
     // copy filter to shared memory
     for (i=0; i<len_h; i++)
-    {
+    {{
        h_trans_flip_s[i] = h_trans_flip[i];
-    }
+    }}
 """
+
 
 _upfirdn_part1_nonshared_h = r"""
 
-extern "C" {
+extern "C" {{
 
 __global__
-void _apply_batch(DTYPE_DATA *x, long long len_x,
-                  DTYPE_FILTER *h_trans_flip_s,
-                  long long len_h,
-                  DTYPE_OUT *out,
-                  long long up,
-                  long long down,
-                  long long out_axis_size,
-                  long long nbatch,
-                  long long _mode,
-                  DTYPE_DATA cval,
-                  long long offset,
-                  long long crop)
-{
-    long long x_conv_idx;
-    long long i;
+void _apply_batch({dtype_data} *x, {dtype_index} len_x,
+                  {dtype_filter} *h_trans_flip_s,
+                  {dtype_index} len_h,
+                  {dtype_out} *out,
+                  int up,
+                  int down,
+                  {dtype_index} out_axis_size,
+                  {dtype_index} nbatch,
+                  int _mode,
+                  {dtype_data} cval,
+                  int offset,
+                  int crop)
+{{
+    {dtype_index} x_conv_idx;
+    {dtype_index} i;
     // TODO: set initial values for these constants outside the loop
-    long long unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
-    long long batch_idx = unraveled_idx / out_axis_size;
+    {dtype_index} unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
+    {dtype_index} batch_idx = unraveled_idx / out_axis_size;
     MODE mode = (MODE)_mode;
 
 """
@@ -475,20 +476,20 @@ void _apply_batch(DTYPE_DATA *x, long long len_x,
 _upfirdn_template_part2 = r"""
 
     if (batch_idx < nbatch)
-    {
-        long long h_per_phase = len_h / up;
-        long long padded_len;
-        long long offset_x = batch_idx * len_x;
-        long long offset_out = batch_idx * out_axis_size;
+    {{
+        {dtype_index} h_per_phase = len_h / up;
+        {dtype_index} padded_len;
+        {dtype_index} offset_x = batch_idx * len_x;
+        {dtype_index} offset_out = batch_idx * out_axis_size;
 
-        long long y_idx = unraveled_idx - offset_out;
-        long long t = ((y_idx + offset)*down) % up;
-        long long h_idx = t * h_per_phase;
-        long long x_idx = ((y_idx + offset)*down) / up;
+        {dtype_index} y_idx = unraveled_idx - offset_out;
+        {dtype_index} t = ((y_idx + offset)*down) % up;
+        {dtype_index} h_idx = t * h_per_phase;
+        {dtype_index} x_idx = ((y_idx + offset)*down) / up;
 
-        DTYPE_OUT val = 0.0;
-        DTYPE_OUT xval;
-        DTYPE_OUT hval = 0.0;
+        {dtype_out} val = 0.0;
+        {dtype_out} xval;
+        {dtype_out} hval = 0.0;
 
         bool zpad = (mode == MODE_CONSTANT) && (abs(cval) == 0.0);
         if (crop)
@@ -497,72 +498,71 @@ _upfirdn_template_part2 = r"""
             padded_len = len_x + len_h - 1 + offset * down / up;
 
         if (x_idx < len_x)
-        {
+        {{
             x_conv_idx = x_idx - h_per_phase + 1;
-            if (x_conv_idx < 0){
+            if (x_conv_idx < 0){{
                 if (zpad)
-                {
+                {{
                     h_idx -= x_conv_idx;
-                }
+                }}
                 else
-                {
-                    for (; x_conv_idx < 0; x_conv_idx++){
+                {{
+                    for (; x_conv_idx < 0; x_conv_idx++){{
                         hval = h_trans_flip_s[h_idx];
-                        if (hval != DTYPE_FILTER(0))
-                        {
+                        if (hval != {dtype_filter}(0))
+                        {{
                             xval = _extend_left(
                                 &x[offset_x], x_conv_idx, len_x, mode, cval);
                             val += xval * hval;
-                        }
+                        }}
                         h_idx++;
-                    }
-                }
+                    }}
+                }}
                 x_conv_idx = 0;
-            }
-            for (; x_conv_idx < x_idx + 1; x_conv_idx++){
+            }}
+            for (; x_conv_idx < x_idx + 1; x_conv_idx++){{
                 hval = h_trans_flip_s[h_idx];
-                if (hval != DTYPE_FILTER(0))
-                {
+                if (hval != {dtype_filter}(0))
+                {{
                     val += x[offset_x + x_conv_idx] * hval;
-                }
+                }}
                 h_idx++;
-            }
+            }}
             atomicAdd(&out[unraveled_idx], val);
-        }
+        }}
 
         // Use a second simplified loop to flush out the last bits
         else if (x_idx < padded_len)
-        {
+        {{
             x_conv_idx = x_idx - h_per_phase + 1;
             for (; x_conv_idx < x_idx + 1; x_conv_idx++)
-            {
+            {{
                 hval = h_trans_flip_s[h_idx];
-                if (hval != DTYPE_FILTER(0))
-                {
+                if (hval != {dtype_filter}(0))
+                {{
                     if (x_conv_idx >= len_x)
-                    {
+                    {{
                         xval = _extend_right(
                             &x[offset_x], x_conv_idx, len_x, mode, cval);
-
-                    }
+                    }}
                     else if (x_conv_idx < 0)
-                    {
+                    {{
                         xval = _extend_left(
                             &x[offset_x], x_conv_idx, len_x, mode, cval);
-                    }
+                    }}
                     else
-                    {
+                    {{
                         xval = x[offset_x + x_conv_idx];
-                    }
+                    }}
                     val += xval * hval;
-                }
+                }}
                 h_idx++;
-            }
+            }}
             atomicAdd(&out[unraveled_idx], val);
-        }
-    }
-}
-}
+        }}
+    }}
+}}
+}}
 """
 
 # version where the filter, h, is copied into local shared memory
@@ -605,7 +605,7 @@ def _nearest_supported_float_dtype(dtype, dtype2=None):
 
 @memoize(for_each_device=True)
 def _get_upfirdn_kernel_inner(
-    up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h_size
+    up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h_size, c_dtype_index,
 ):
     from cupy.cuda import nvrtc
 
@@ -613,19 +613,27 @@ def _get_upfirdn_kernel_inner(
 
     # crude template-like functionality via string replacement
     if up == down == 1:
-        code = _convolved_batch_template.replace("DTYPE_DATA", c_dtype_data)
+        code = _convolved_batch_template.format(
+            dtype_data=c_dtype_data,
+            dtype_filter=c_dtype_filter,
+            dtype_out=c_dtype_out,
+            dtype_index=c_dtype_index,
+        )
     else:
         if h_size <= 128:
-            code = _upfirdn_batch_template_shared_h.replace(
-                "DTYPE_DATA", c_dtype_data
+            code = _upfirdn_batch_template_shared_h.format(
+                dtype_data=c_dtype_data,
+                dtype_filter=c_dtype_filter,
+                dtype_out=c_dtype_out,
+                dtype_index=c_dtype_index,
             )
         else:
-            code = _upfirdn_batch_template_nonshared_h.replace(
-                "DTYPE_DATA", c_dtype_data
+            code = _upfirdn_batch_template_nonshared_h.format(
+                dtype_data=c_dtype_data,
+                dtype_filter=c_dtype_filter,
+                dtype_out=c_dtype_out,
+                dtype_index=c_dtype_index,
             )
-
-    code = code.replace("DTYPE_FILTER", c_dtype_filter)
-    code = code.replace("DTYPE_OUT", c_dtype_out)
 
     if nvrtc.getVersion() < (9, 2):
         # __shared__ complex<T> doesn't work on older CUDA compilers
@@ -681,7 +689,7 @@ def _determine_dtypes(data_dtype, data_real_dtype, h_dtype, h_real_dtype):
 
 
 @profile
-def get_upfirdn_kernel(h, data, up, down):
+def get_upfirdn_kernel(h, data, up, down, c_dtype_index="int"):
     """Compile an upfirdn kernel based on dtype.
 
     Also converts h, data to the nearest supported floating point type.
@@ -698,7 +706,7 @@ def get_upfirdn_kernel(h, data, up, down):
 
     # memoized GPU kernels
     kern = _get_upfirdn_kernel_inner(
-        up, down, c_dt_data, c_dt_h, c_dt_out, h.size
+        up, down, c_dt_data, c_dt_h, c_dt_out, h.size, c_dtype_index
     )
 
     return h, data, dt_out, kern
@@ -759,7 +767,11 @@ def convolve1d(
     """
 
     # compile or retrieve cached kernel for the given dtypes
-    h, x, dtype_out, kern = get_upfirdn_kernel(h, x, up=1, down=1)
+    size_max = max(x.size, h.size)
+    c_dtype_index = "size_t" if size_max > 1 << 31 else "int"
+    h, x, dtype_out, kern = get_upfirdn_kernel(
+        h, x, up=1, down=1, c_dtype_index=c_dtype_index
+    )
 
     ndim = x.ndim
 
@@ -891,7 +903,11 @@ def upfirdn(
         raise ValueError("h must be 1-D with non-zero length")
 
     # compile or retrieve cached kernel for the given dtypes
-    h, x, dtype_out, kern = get_upfirdn_kernel(h, x, up=up, down=down)
+    size_max = max(x.size, h.size)
+    c_dtype_index = "size_t" if size_max > 1 << 31 else "int"
+    h, x, dtype_out, kern = get_upfirdn_kernel(
+        h, x, up=up, down=down, c_dtype_index=c_dtype_index
+    )
 
     ndim = x.ndim
 

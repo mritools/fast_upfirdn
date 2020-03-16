@@ -109,6 +109,7 @@ modes introduced for ``upfirdn`` in SciPy 1.4, while at the time of writing
 [conda]: https://docs.conda.io/en/latest/
 [CuPy]: https://cupy.chainer.org
 [cuSignal]: https://github.com/rapidsai/cusignal
+[Cython]: https://cython.org/
 [Numba]: numba.pydata.org
 [NumPy]: https://numpy.org/
 [PyPI]: https://pypi.org
