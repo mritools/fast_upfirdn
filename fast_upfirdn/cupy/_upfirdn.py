@@ -306,7 +306,7 @@ extern "C" {{
 
 __global__
 void _apply_batch({dtype_data} *x, {dtype_index} len_x,
-               {dtype_filter} *h_trans_flip,
+               {dtype_filter} *h_trans_flip_s,
                {dtype_index} len_h,
                {dtype_out} *out,
                {dtype_index} out_axis_size,
@@ -316,18 +316,12 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
                int offset,
                int crop)
 {{
-    __shared__ {dtype_filter} h_trans_flip_s[128];
     {dtype_index} x_conv_idx;
     {dtype_index} i;
     // TODO: set initial values for these constants outside the loop
     {dtype_index} unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
     {dtype_index} batch_idx = unraveled_idx / out_axis_size;
     MODE mode = (MODE)_mode;
-
-    for (i=0; i<len_h; i++)
-    {{
-        h_trans_flip_s[i] = h_trans_flip[i];
-    }}
 
     if (batch_idx < nbatch)
     {{
@@ -411,42 +405,7 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
 """
 )
 
-
-_upfirdn_part1_shared_h = r"""
-
-extern "C" {{
-
-__global__
-void _apply_batch({dtype_data} *x, {dtype_index} len_x,
-                  {dtype_filter} *h_trans_flip,
-                  {dtype_index} len_h,
-                  {dtype_out} *out,
-                  int up,
-                  int down,
-                  {dtype_index} out_axis_size,
-                  {dtype_index} nbatch,
-                  int _mode,
-                  {dtype_data} cval,
-                  int offset,
-                  int crop)
-{{
-    __shared__ {dtype_filter} h_trans_flip_s[128];
-    {dtype_index} x_conv_idx;
-    {dtype_index} i;
-    // TODO: set initial values for these constants outside the loop
-    {dtype_index} unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
-    {dtype_index} batch_idx = unraveled_idx / out_axis_size;
-    MODE mode = (MODE)_mode;
-
-    // copy filter to shared memory
-    for (i=0; i<len_h; i++)
-    {{
-       h_trans_flip_s[i] = h_trans_flip[i];
-    }}
-"""
-
-
-_upfirdn_part1_nonshared_h = r"""
+_upfirdn_h = r"""
 
 extern "C" {{
 
@@ -470,10 +429,6 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
     {dtype_index} unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
     {dtype_index} batch_idx = unraveled_idx / out_axis_size;
     MODE mode = (MODE)_mode;
-
-"""
-
-_upfirdn_template_part2 = r"""
 
     if (batch_idx < nbatch)
     {{
@@ -565,15 +520,8 @@ _upfirdn_template_part2 = r"""
 }}
 """
 
-# version where the filter, h, is copied into local shared memory
-_upfirdn_batch_template_shared_h = (
-    _include + _upfirdn_part1_shared_h + _upfirdn_template_part2
-)
-
 # version where the filter, h, is not copied into local shared memory
-_upfirdn_batch_template_nonshared_h = (
-    _include + _upfirdn_part1_nonshared_h + _upfirdn_template_part2
-)
+_upfirdn_batch_template_nonshared_h = _include + _upfirdn_h
 
 
 # dictionary: CUDA C data types corresponding to numpy dtype.char values
@@ -607,8 +555,6 @@ def _nearest_supported_float_dtype(dtype, dtype2=None):
 def _get_upfirdn_kernel_inner(
     up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h_size, c_dtype_index,
 ):
-    from cupy.cuda import nvrtc
-
     func_name = "_apply_batch"
 
     # crude template-like functionality via string replacement
@@ -620,31 +566,12 @@ def _get_upfirdn_kernel_inner(
             dtype_index=c_dtype_index,
         )
     else:
-        if h_size <= 128:
-            code = _upfirdn_batch_template_shared_h.format(
-                dtype_data=c_dtype_data,
-                dtype_filter=c_dtype_filter,
-                dtype_out=c_dtype_out,
-                dtype_index=c_dtype_index,
-            )
-        else:
-            code = _upfirdn_batch_template_nonshared_h.format(
-                dtype_data=c_dtype_data,
-                dtype_filter=c_dtype_filter,
-                dtype_out=c_dtype_out,
-                dtype_index=c_dtype_index,
-            )
-
-    if nvrtc.getVersion() < (9, 2):
-        # __shared__ complex<T> doesn't work on older CUDA compilers
-
-        """ From the CUDA 9.2 release notes:
-        The CUDA compiler previously incorrectly determined that the
-        constructor for a __shared__ multidimensional array variable was
-        non-empty in some scenarios, and generated a spurious diagnostic.
-        The bug has now been fixed.
-        """
-        code = code.replace("__shared__ complex", "complex")
+        code = _upfirdn_batch_template_nonshared_h.format(
+            dtype_data=c_dtype_data,
+            dtype_filter=c_dtype_filter,
+            dtype_out=c_dtype_out,
+            dtype_index=c_dtype_index,
+        )
 
     kern = cupy.RawKernel(code, func_name)
     return kern
