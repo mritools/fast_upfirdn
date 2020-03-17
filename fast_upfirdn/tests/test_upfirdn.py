@@ -11,9 +11,6 @@ signal = pytest.importorskip("scipy.signal")
 ndimage = pytest.importorskip("scipy.ndimage")
 testing = pytest.importorskip("cupy.testing")
 
-padtype_options = ["constant", "mean", "minimum", "maximum", "line"]
-# TOOD: add median once cupy.median is implemented
-
 
 @cupy.testing.with_requires("cupy>=7.0")
 @pytest.mark.parametrize("mode", _upfirdn_modes)

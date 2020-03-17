@@ -93,208 +93,6 @@ enum MODE {{
 }};
 
 
-__device__
-{dtype_data} _extend_left({dtype_data} *x, {dtype_index} idx, {dtype_index} len_x,
-                        MODE mode, {dtype_data} cval)
-{{
-    {dtype_data} le = 0.;
-    {dtype_data} lin_slope = 0.;
-
-    switch(mode)
-    {{
-    // note: idx will be < 0
-    case MODE_SYMMETRIC:
-        if ((-idx) < len_x)
-        {{
-            return x[-idx - 1];
-        }}
-        else
-        {{
-            // general case for multiple reflections:
-            // the pattern repeats with periodicity 2*len_x;
-            idx = (-idx - 1) % (2 * len_x);
-            if (idx < len_x)
-                return x[idx];
-            else
-                return x[len_x - 1 - (idx - len_x)];
-        }}
-    case MODE_REFLECT:
-        if ((-idx) < (len_x - 1))
-        {{
-            return x[-idx];
-        }}
-        else
-        {{
-            // general case for multiple reflections:
-            // the pattern repeats with periodicity 2*(len_x - 1);
-            idx = (-idx - 1) % (2 * (len_x - 1));
-            if (idx < (len_x - 1))
-                return x[idx + 1];
-            else
-                return x[len_x - 2 - (idx - (len_x - 1))];
-        }}
-    case MODE_PERIODIC:
-        idx = (-idx - 1) % len_x;
-        return x[len_x - idx - 1];
-    case MODE_SMOOTH:
-        return x[0] + ({dtype_data})idx * (x[1] - x[0]);
-    case MODE_LINE:
-        lin_slope = (x[len_x - 1] - x[0]) / ({dtype_data})(len_x - 1);
-        return x[0] + ({dtype_data})idx * lin_slope;
-    case MODE_ANTISYMMETRIC:
-        if ((-idx) < len_x)
-        {{
-            return -x[-idx - 1];
-        }}
-        else
-        {{
-            idx = (-idx - 1) % (2 * len_x);
-            if (idx < len_x)
-            {{
-                return -x[idx];
-            }}
-            else
-            {{
-                return x[len_x - 1 - (idx - len_x)];
-            }}
-        }}
-    case MODE_ANTIREFLECT:
-        if ((-idx) < len_x)
-        {{
-            return x[0] - (x[-idx] - x[0]);
-        }}
-        else
-        {{
-            le = x[0] + (x[0] - x[len_x - 1]) *
-                 (({dtype_data})((-(idx) - 1) / (len_x - 1)));
-            idx = (-idx - 1) % (2 * (len_x - 1));
-            if (idx < (len_x - 1))
-            {{
-                return le - (x[idx + 1] - x[0]);
-            }}
-            else
-            {{
-                return le - (
-                    x[len_x - 1] - x[len_x - 2 - (idx - (len_x - 1))]);
-            }}
-        }}
-    case MODE_CONSTANT_EDGE:
-        return x[0];
-    case MODE_CONSTANT:
-        return cval;
-    default:
-        return -1.;
-    }}
-}}
-
-
-__device__
-{dtype_data} _extend_right({dtype_data} *x, {dtype_index} idx, {dtype_index} len_x,
-                           MODE mode, {dtype_data} cval)
-{{
-    // note: idx will be >= len_x
-    {dtype_data} re = 0.;
-    {dtype_data} lin_slope = 0.;
-    switch(mode)
-    {{
-
-        case MODE_SYMMETRIC:
-        {{
-            if (idx < (2 * len_x))
-            {{
-                return x[len_x - 1 - (idx - len_x)];
-            }}
-            else
-            {{
-                idx = idx % (2 * len_x);
-                if (idx < len_x)
-                {{
-                    return x[idx];
-                }}
-                else
-                {{
-                    return x[len_x - 1 - (idx - len_x)];
-                }}
-            }}
-        }}
-        case MODE_REFLECT:
-        {{
-            if (idx < (2 * len_x - 1))
-            {{
-                return x[len_x - 2 - (idx - len_x)];
-            }}
-            else
-            {{
-                idx = idx % (2 * (len_x - 1));
-                if (idx < (len_x - 1))
-                {{
-                    return x[idx];
-                }}
-                else
-                {{
-                    return x[len_x - 1 - (idx - (len_x - 1))];
-                }}
-            }}
-        }}
-        case MODE_PERIODIC:
-        {{
-            return x[idx % len_x];
-        }}
-        case MODE_SMOOTH:
-            return x[len_x - 1] +
-                   ({dtype_data})(idx - len_x + 1) *
-                   (x[len_x - 1] - x[len_x - 2]);
-        case MODE_LINE:
-            lin_slope = (x[len_x - 1] - x[0]) / ({dtype_data})(len_x - 1);
-            return x[len_x - 1] + ({dtype_data})(idx - len_x + 1) * lin_slope;
-        case MODE_CONSTANT_EDGE:
-            return x[len_x - 1];
-        case MODE_ANTISYMMETRIC:
-            if (idx < (2 * len_x))
-            {{
-                return -x[len_x - 1 - (idx - len_x)];
-            }}
-            else
-            {{
-                idx = idx % (2 * len_x);
-                if (idx < len_x)
-                {{
-                    return x[idx];
-                }}
-                else
-                {{
-                    return -x[len_x - 1 - (idx - len_x)];
-                }}
-            }}
-        case MODE_ANTIREFLECT:
-            if (idx < (2 * len_x - 1))
-            {{
-                return x[len_x - 1] - (
-                    x[len_x - 2 - (idx - len_x)] - x[len_x - 1]);
-            }}
-            else
-            {{
-                re = x[len_x - 1] +
-                     (x[len_x - 1] - x[0]) *
-                     (({dtype_data})(idx / (len_x - 1) - 1));
-                idx = idx % (2 * (len_x - 1));
-                if (idx < (len_x - 1))
-                {{
-                    return re + (x[idx] - x[0]);
-                }}
-                else
-                {{
-                    return re + (x[len_x - 1] -
-                                 x[len_x - 1 - (idx - (len_x - 1))]);
-                }}
-            }}
-        case MODE_CONSTANT:
-            return cval;
-        default:
-            return -1.;
-    }}
-}}
-
 """
 
 
@@ -316,11 +114,11 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
                int offset,
                int crop)
 {{
-    {dtype_index} x_conv_idx;
-    {dtype_index} i;
+    {dtype_index} i_conv;
     // TODO: set initial values for these constants outside the loop
     {dtype_index} unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
     {dtype_index} batch_idx = unraveled_idx / out_axis_size;
+
     MODE mode = (MODE)_mode;
 
     if (batch_idx < nbatch)
@@ -328,6 +126,7 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
         {dtype_index} padded_len;
         {dtype_index} offset_x = batch_idx * len_x;
         {dtype_index} offset_out = batch_idx * out_axis_size;
+        {dtype_data} *xo = &x[offset_x];
 
         {dtype_index} y_idx = unraveled_idx - offset_out;
         {dtype_index} h_idx = 0;
@@ -349,26 +148,27 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
 
         if (x_idx < len_x)
         {{
-            x_conv_idx = x_idx - len_h + 1;
-            if (x_conv_idx < 0)
+            i_conv = x_idx - len_h + 1;
+            if (i_conv < 0)
             {{
                 if (zpad)
                 {{
-                    h_idx -= x_conv_idx;
+                    h_idx -= i_conv;
                 }}
                 else
                 {{
-                    for (; x_conv_idx < 0; x_conv_idx++){{
-                        xval = _extend_left(
-                            &x[offset_x], x_conv_idx, len_x, mode, cval);
+                    for (; i_conv < 0; i_conv++){{
+                        // xval = _extend_left(&xo, i_conv, len_x, mode, cval);
+                        {extend_left}
                         val += xval * h_trans_flip_s[h_idx];
+
                         h_idx++;
                     }}
                 }}
-                x_conv_idx = 0;
+                i_conv = 0;
             }}
-            for (; x_conv_idx < x_idx + 1; x_conv_idx++){{
-                val += x[offset_x + x_conv_idx] * h_trans_flip_s[h_idx];
+            for (; i_conv < x_idx + 1; i_conv++){{
+                val += x[offset_x + i_conv] * h_trans_flip_s[h_idx];
                 h_idx++;
             }}
             atomicAdd(&out[unraveled_idx], val);
@@ -377,22 +177,22 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
         // Use a second simplified loop to flush out the last bits
         else if (x_idx < padded_len)
         {{
-            x_conv_idx = x_idx - len_h + 1;
-            for (; x_conv_idx < x_idx + 1; x_conv_idx++)
+            i_conv = x_idx - len_h + 1;
+            for (; i_conv < x_idx + 1; i_conv++)
             {{
-                if (x_conv_idx >= len_x)
+                if (i_conv >= len_x)
                 {{
-                    xval = _extend_right(
-                        &x[offset_x], x_conv_idx, len_x, mode, cval);
+                    //xval = _extend_right(&xo, i_conv, len_x, mode, cval);
+                    {extend_right}
                 }}
-                else if (x_conv_idx < 0)
+                else if (i_conv < 0)
                 {{
-                    xval = _extend_left(
-                        &x[offset_x], x_conv_idx, len_x, mode, cval);
+                    //xval = _extend_left(&xo, i_conv, len_x, mode, cval);
+                    {extend_left}
                 }}
                 else
                 {{
-                    xval = x[offset_x + x_conv_idx];
+                    xval = x[offset_x + i_conv];
                 }}
                 val += xval * h_trans_flip_s[h_idx];
                 h_idx++;
@@ -423,8 +223,7 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
                   int offset,
                   int crop)
 {{
-    {dtype_index} x_conv_idx;
-    {dtype_index} i;
+    {dtype_index} i_conv;
     // TODO: set initial values for these constants outside the loop
     {dtype_index} unraveled_idx = blockDim.x * blockIdx.x + threadIdx.x;
     {dtype_index} batch_idx = unraveled_idx / out_axis_size;
@@ -436,6 +235,7 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
         {dtype_index} padded_len;
         {dtype_index} offset_x = batch_idx * len_x;
         {dtype_index} offset_out = batch_idx * out_axis_size;
+        {dtype_data} *xo = &x[offset_x];
 
         {dtype_index} y_idx = unraveled_idx - offset_out;
         {dtype_index} t = ((y_idx + offset)*down) % up;
@@ -454,32 +254,33 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
 
         if (x_idx < len_x)
         {{
-            x_conv_idx = x_idx - h_per_phase + 1;
-            if (x_conv_idx < 0){{
+            i_conv = x_idx - h_per_phase + 1;
+            if (i_conv < 0){{
                 if (zpad)
                 {{
-                    h_idx -= x_conv_idx;
+                    h_idx -= i_conv;
                 }}
                 else
                 {{
-                    for (; x_conv_idx < 0; x_conv_idx++){{
+                    for (; i_conv < 0; i_conv++){{
                         hval = h_trans_flip_s[h_idx];
                         if (hval != {dtype_filter}(0))
                         {{
-                            xval = _extend_left(
-                                &x[offset_x], x_conv_idx, len_x, mode, cval);
+                            //xval = _extend_left(
+                            //    &x[offset_x], i_conv, len_x, mode, cval);
+                            {extend_left}
                             val += xval * hval;
                         }}
                         h_idx++;
                     }}
                 }}
-                x_conv_idx = 0;
+                i_conv = 0;
             }}
-            for (; x_conv_idx < x_idx + 1; x_conv_idx++){{
+            for (; i_conv < x_idx + 1; i_conv++){{
                 hval = h_trans_flip_s[h_idx];
                 if (hval != {dtype_filter}(0))
                 {{
-                    val += x[offset_x + x_conv_idx] * hval;
+                    val += x[offset_x + i_conv] * hval;
                 }}
                 h_idx++;
             }}
@@ -489,25 +290,25 @@ void _apply_batch({dtype_data} *x, {dtype_index} len_x,
         // Use a second simplified loop to flush out the last bits
         else if (x_idx < padded_len)
         {{
-            x_conv_idx = x_idx - h_per_phase + 1;
-            for (; x_conv_idx < x_idx + 1; x_conv_idx++)
+            i_conv = x_idx - h_per_phase + 1;
+            for (; i_conv < x_idx + 1; i_conv++)
             {{
                 hval = h_trans_flip_s[h_idx];
                 if (hval != {dtype_filter}(0))
                 {{
-                    if (x_conv_idx >= len_x)
+                    if (i_conv >= len_x)
                     {{
-                        xval = _extend_right(
-                            &x[offset_x], x_conv_idx, len_x, mode, cval);
+                        //xval = _extend_right(&xo, i_conv, len_x, mode, cval);
+                        {extend_right}
                     }}
-                    else if (x_conv_idx < 0)
+                    else if (i_conv < 0)
                     {{
-                        xval = _extend_left(
-                            &x[offset_x], x_conv_idx, len_x, mode, cval);
+                        //xval = _extend_left(&xo, i_conv, len_x, mode, cval);
+                        {extend_left}
                     }}
                     else
                     {{
-                        xval = x[offset_x + x_conv_idx];
+                        xval = x[offset_x + i_conv];
                     }}
                     val += xval * hval;
                 }}
@@ -533,6 +334,232 @@ c_dtypes = {
 }
 
 
+# TODO: convert return statements to assignments
+# TODO: _extend_right_boundary
+def _extend_left_boundary(mode, c_dtype_data, c_dtype_index):
+    if mode == "symmetric":
+        ops = """
+        if ((-i_conv) < len_x)
+        {{
+            xval = xo[-i_conv - 1];
+        }}
+        else
+        {{
+            // general case for multiple reflections:
+            // the pattern repeats with periodicity 2*len_x;
+            {dtype_index} i_conv_ = (-i_conv - 1) % (2 * len_x);
+            if (i_conv_ < len_x)
+                xval = xo[i_conv_];
+            else
+                xval = xo[len_x - 1 - (i_conv_ - len_x)];
+        }}
+        """
+    elif mode == "reflect":
+        ops = """
+        if ((-i_conv) < (len_x - 1))
+        {{
+            xval = xo[-i_conv];
+        }}
+        else
+        {{
+            // general case for multiple reflections:
+            // the pattern repeats with periodicity 2*(len_x - 1);
+            {dtype_index} i_conv_ = (-i_conv - 1) % (2 * (len_x - 1));
+            if (i_conv_ < (len_x - 1))
+                xval = xo[i_conv_ + 1];
+            else
+                xval = xo[len_x - 2 - (i_conv_ - (len_x - 1))];
+        }}
+        """
+    elif mode in ["periodic", "wrap"]:
+        ops = """
+        {dtype_index} i_conv_ = (-i_conv - 1) % len_x;
+        xval = xo[len_x - i_conv_ - 1];
+        """
+    elif mode == "smooth":
+        ops = """
+        xval = xo[0] + ({dtype_data})i_conv * (xo[1] - xo[0]);
+        """
+    elif mode == "line":
+        ops = """
+        {dtype_data} lin_slope = 0.;
+        lin_slope = (xo[len_x - 1] - xo[0]) / ({dtype_data})(len_x - 1);
+        xval = xo[0] + ({dtype_data})i_conv * lin_slope;
+        """
+    elif mode == "antisymmetric":
+        ops = """
+        if ((-i_conv) < len_x)
+        {{
+            xval = -xo[-i_conv - 1];
+        }}
+        else
+        {{
+            {dtype_index} i_conv_ = (-i_conv - 1) % (2 * len_x);
+            if (i_conv_ < len_x)
+            {{
+                xval = -xo[i_conv_];
+            }}
+            else
+            {{
+                xval = xo[len_x - 1 - (i_conv_ - len_x)];
+            }}
+        }}
+        """
+    elif mode == "antireflect":
+        ops = """
+        {dtype_data} le = 0.;
+        if ((-i_conv) < len_x)
+        {{
+            xval = xo[0] - (xo[-i_conv] - xo[0]);
+        }}
+        else
+        {{
+            le = xo[0] + (xo[0] - xo[len_x - 1]) *
+                 (({dtype_data})((-(i_conv) - 1) / (len_x - 1)));
+            {dtype_index} i_conv_ = (-i_conv - 1) % (2 * (len_x - 1));
+            if (i_conv_ < (len_x - 1))
+            {{
+                xval = le - (xo[i_conv_ + 1] - xo[0]);
+            }}
+            else
+            {{
+                xval = le - (
+                    xo[len_x - 1] - xo[len_x - 2 - (i_conv_ - (len_x - 1))]);
+            }}
+        }}
+        """
+    elif mode == "edge":
+        ops = """
+        xval = xo[0];
+        """
+    elif mode in ["constant", "zero"]:
+        ops = """
+        xval = cval;
+        """
+    else:
+        raise ValueError("unkown mode {}".format(mode))
+    ops = ops.format(dtype_data=c_dtype_data, dtype_index=c_dtype_index)
+    return ops
+
+
+"""
+
+"""
+
+
+def _extend_right_boundary(mode, c_dtype_data, c_dtype_index):
+    if mode == "symmetric":
+        ops = """
+        if (i_conv < (2 * len_x))
+        {{
+            xval = x[len_x - 1 - (i_conv - len_x)];
+        }}
+        else
+        {{
+            {dtype_index} i_conv_ = i_conv % (2 * len_x);
+            if (i_conv_ < len_x)
+            {{
+                xval = x[i_conv_];
+            }}
+            else
+            {{
+                xval = x[len_x - 1 - (i_conv_ - len_x)];
+            }}
+        }}
+        """
+    elif mode == "reflect":
+        ops = """
+        if (i_conv < (2 * len_x - 1))
+        {{
+            xval = x[len_x - 2 - (i_conv - len_x)];
+        }}
+        else
+        {{
+            {dtype_index} i_conv_ = i_conv % (2 * (len_x - 1));
+            if (i_conv_ < (len_x - 1))
+            {{
+                xval = x[i_conv_];
+            }}
+            else
+            {{
+                xval = x[len_x - 1 - (i_conv_ - (len_x - 1))];
+            }}
+        }}
+        """
+    elif mode in ["periodic", "wrap"]:
+        ops = """
+        xval = x[i_conv % len_x];
+        """
+    elif mode == "smooth":
+        ops = """
+        xval = x[len_x - 1] +
+                   ({dtype_data})(i_conv - len_x + 1) *
+                   (x[len_x - 1] - x[len_x - 2]);
+        """
+    elif mode == "line":
+        ops = """
+        {dtype_data} lin_slope = 0.;
+        lin_slope = (x[len_x - 1] - x[0]) / ({dtype_data})(len_x - 1);
+        xval = x[len_x - 1] + ({dtype_data})(i_conv - len_x + 1) * lin_slope;
+        """
+    elif mode == "antisymmetric":
+        ops = """
+        if (i_conv < (2 * len_x))
+        {{
+            xval = -x[len_x - 1 - (i_conv - len_x)];
+        }}
+        else
+        {{
+            {dtype_index} i_conv_ = i_conv % (2 * len_x);
+            if (i_conv_ < len_x)
+            {{
+                xval = x[i_conv_];
+            }}
+            else
+            {{
+                xval = -x[len_x - 1 - (i_conv_ - len_x)];
+            }}
+        }}
+        """
+    elif mode == "antireflect":
+        ops = """
+        {dtype_data} re = 0.;
+        if (i_conv < (2 * len_x - 1))
+        {{
+            xval = x[len_x - 1] - (
+                x[len_x - 2 - (i_conv - len_x)] - x[len_x - 1]);
+        }}
+        else
+        {{
+            re = x[len_x - 1] +
+                 (x[len_x - 1] - x[0]) *
+                 (({dtype_data})(i_conv / (len_x - 1) - 1));
+            {dtype_index} i_conv_ = i_conv % (2 * (len_x - 1));
+            if (i_conv_ < (len_x - 1))
+            {{
+                xval = re + (x[i_conv_] - x[0]);
+            }}
+            else
+            {{
+                xval = re + (x[len_x - 1] -
+                             x[len_x - 1 - (i_conv_ - (len_x - 1))]);
+            }}
+        }}
+        """
+    elif mode == "edge":
+        ops = """
+        xval = x[len_x - 1];
+        """
+    elif mode in ["constant", "zero"]:
+        ops = """
+        xval = cval;
+        """
+    else:
+        raise ValueError("unkown mode {}".format(mode))
+    ops = ops.format(dtype_data=c_dtype_data, dtype_index=c_dtype_index)
+    return ops
+
+
 @memoize()
 def _nearest_supported_float_dtype(dtype, dtype2=None):
     if dtype.char in ["f", "d", "F", "D"] and (
@@ -553,10 +580,19 @@ def _nearest_supported_float_dtype(dtype, dtype2=None):
 
 @memoize(for_each_device=True)
 def _get_upfirdn_kernel_inner(
-    up, down, c_dtype_data, c_dtype_filter, c_dtype_out, h_size, c_dtype_index,
+    up,
+    down,
+    c_dtype_data,
+    c_dtype_filter,
+    c_dtype_out,
+    h_size,
+    c_dtype_index,
+    mode,
 ):
     func_name = "_apply_batch"
 
+    extend_left = _extend_left_boundary(mode, c_dtype_data, c_dtype_index)
+    extend_right = _extend_right_boundary(mode, c_dtype_data, c_dtype_index)
     # crude template-like functionality via string replacement
     if up == down == 1:
         code = _convolved_batch_template.format(
@@ -564,6 +600,8 @@ def _get_upfirdn_kernel_inner(
             dtype_filter=c_dtype_filter,
             dtype_out=c_dtype_out,
             dtype_index=c_dtype_index,
+            extend_left=extend_left,
+            extend_right=extend_right,
         )
     else:
         code = _upfirdn_batch_template_nonshared_h.format(
@@ -571,6 +609,8 @@ def _get_upfirdn_kernel_inner(
             dtype_filter=c_dtype_filter,
             dtype_out=c_dtype_out,
             dtype_index=c_dtype_index,
+            extend_left=extend_left,
+            extend_right=extend_right,
         )
 
     kern = cupy.RawKernel(code, func_name)
@@ -616,7 +656,7 @@ def _determine_dtypes(data_dtype, data_real_dtype, h_dtype, h_real_dtype):
 
 
 @profile
-def get_upfirdn_kernel(h, data, up, down, c_dtype_index="int"):
+def get_upfirdn_kernel(h, data, up, down, mode, c_dtype_index="int"):
     """Compile an upfirdn kernel based on dtype.
 
     Also converts h, data to the nearest supported floating point type.
@@ -633,7 +673,7 @@ def get_upfirdn_kernel(h, data, up, down, c_dtype_index="int"):
 
     # memoized GPU kernels
     kern = _get_upfirdn_kernel_inner(
-        up, down, c_dt_data, c_dt_h, c_dt_out, h.size, c_dtype_index
+        up, down, c_dt_data, c_dt_h, c_dt_out, h.size, c_dtype_index, mode
     )
 
     return h, data, dt_out, kern
@@ -697,7 +737,7 @@ def convolve1d(
     size_max = max(x.size, h.size)
     c_dtype_index = "size_t" if size_max > 1 << 31 else "int"
     h, x, dtype_out, kern = get_upfirdn_kernel(
-        h, x, up=1, down=1, c_dtype_index=c_dtype_index
+        h, x, up=1, down=1, mode=mode, c_dtype_index=c_dtype_index
     )
 
     ndim = x.ndim
@@ -833,7 +873,7 @@ def upfirdn(
     size_max = max(x.size, h.size)
     c_dtype_index = "size_t" if size_max > 1 << 31 else "int"
     h, x, dtype_out, kern = get_upfirdn_kernel(
-        h, x, up=up, down=down, c_dtype_index=c_dtype_index
+        h, x, up=up, down=down, mode=mode, c_dtype_index=c_dtype_index
     )
 
     ndim = x.ndim
