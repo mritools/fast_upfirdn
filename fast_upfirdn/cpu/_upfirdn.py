@@ -92,11 +92,12 @@ class _UpFIRDn(object):
         # This both transposes, and "flips" each phase for filtering
         self._h_trans_flip = _pad_h(h, self._up)
         self._h_trans_flip = np.ascontiguousarray(self._h_trans_flip)
+        self._h_len_orig = len(h)
 
     def apply_filter(
         self, x, axis=-1, mode="zero", cval=0, offset=0, crop=False, take=None
     ):
-        """Apply the prepared filter to the specified axis of a nD signal x"""
+        """Apply the prepared filter to the specified axis of nD signal x"""
         if axis < -x.ndim or axis >= x.ndim:
             raise ValueError("axis out of range")
         # Explicit use of np.int64 for output_shape dtype avoids OverflowError
@@ -107,7 +108,7 @@ class _UpFIRDn(object):
             output_len = int(ceil(x.shape[axis] * self._up / self._down))
         else:
             output_len = _output_len(
-                len(self._h_trans_flip), x.shape[axis], self._up, self._down
+                self._h_len_orig, x.shape[axis], self._up, self._down
             )
         output_shape[axis] = output_len
         output_shape = tuple(output_shape)
@@ -187,15 +188,17 @@ def upfirdn(
     The algorithm is an implementation of the block diagram shown on page 129
     of the Vaidyanathan text [1]_ (Figure 4.3-8d).
 
-    .. [1] P. P. Vaidyanathan, Multirate Systems and Filter Banks,
-       Prentice Hall, 1993.
-
     The direct approach of upsampling by factor of P with zero insertion,
     FIR filtering of length ``N``, and downsampling by factor of Q is
     O(N*Q) per output sample. The polyphase implementation used here is
     O(N/P).
 
     .. versionadded:: 0.18
+
+    References
+    ----------
+    .. [1] P. P. Vaidyanathan, Multirate Systems and Filter Banks,
+           Prentice Hall, 1993.
 
     Examples
     --------

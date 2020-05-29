@@ -3,10 +3,17 @@ from itertools import product
 import numpy as np
 import pytest
 
+import scipy
 from scipy.signal import upfirdn as upfirdn_scipy
 from fast_upfirdn import upfirdn
 from fast_upfirdn.cpu._upfirdn_apply import _pad_test
 from fast_upfirdn.cpu._upfirdn import _upfirdn_modes
+
+
+def assert_allclose2(x, y):
+    if np.lib.NumpyVersion(scipy.__version__) < np.lib.NumpyVersion("1.5.0"):
+        x = x[tuple([slice(s) for s in y.shape])]
+    np.testing.assert_allclose(x, y)
 
 
 @pytest.mark.parametrize(
@@ -33,12 +40,12 @@ def test_dtype_combos_cpu(dtype_data, dtype_filter):
     h = np.arange(5, dtype=dtype_filter)
 
     # up=1 kernel case
-    np.testing.assert_allclose(
+    assert_allclose2(
         upfirdn_scipy(h, x, up=1, down=2), upfirdn(h, x, up=1, down=2)
     )
 
     # down=1 kernel case
-    np.testing.assert_allclose(
+    assert_allclose2(
         upfirdn_scipy(h, x, up=2, down=1), upfirdn(h, x, up=2, down=1)
     )
 
@@ -52,12 +59,12 @@ def test_input_and_filter_sizes_cpu(nh, nx):
     h = np.arange(1, nh + 1, dtype=dtype_filter)
 
     # up=1 kernel case
-    np.testing.assert_allclose(
+    assert_allclose2(
         upfirdn_scipy(h, x, up=1, down=2), upfirdn(h, x, up=1, down=2)
     )
 
     # down=1 kernel case
-    np.testing.assert_allclose(
+    assert_allclose2(
         upfirdn_scipy(h, x, up=2, down=1), upfirdn(h, x, up=2, down=1)
     )
 
@@ -78,13 +85,13 @@ def test_axis_and_order_cpu(shape, axis, order):
     ndim = len(shape)
     if axis >= -ndim and axis < ndim:
         # up=1 case
-        np.testing.assert_allclose(
+        assert_allclose2(
             upfirdn_scipy(h, x, up=1, down=2, axis=axis),
             upfirdn(h, x, up=1, down=2, axis=axis),
         )
 
         # down=1 case
-        np.testing.assert_allclose(
+        assert_allclose2(
             upfirdn_scipy(h, x, up=2, down=1, axis=axis),
             upfirdn(h, x, up=2, down=1, axis=axis),
         )
@@ -102,7 +109,7 @@ def test_general_up_and_down_cpu(up, down, nx, nh):
     x = np.arange(nx, dtype=dtype_data)
     h = np.arange(1, nh + 1, dtype=dtype_filter)
 
-    np.testing.assert_allclose(
+    assert_allclose2(
         upfirdn_scipy(h, x, up=up, down=down), upfirdn(h, x, up=up, down=down)
     )
 

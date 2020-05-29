@@ -31,12 +31,7 @@ def _output_len(len_h, in_len, up, down):
 
     scipy.signal._upfirdn._output_len
     """
-    in_len_copy = in_len + (len_h + (-len_h % up)) // up - 1
-    nt = in_len_copy * up
-    need = nt // down
-    if nt % down > 0:
-        need += 1
-    return need
+    return (((in_len - 1) * up + len_h) - 1) // down + 1
 
 
 _include = r"""
