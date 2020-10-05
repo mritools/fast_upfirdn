@@ -8,7 +8,11 @@ from math import ceil
 import numpy as np
 
 import cupy
-from cupy.util import memoize
+
+try:
+    from cupy.util import memoize
+except ImportError:
+    from cupy import memoize
 from fast_upfirdn.cpu._upfirdn_apply import mode_enum as _get_mode_enum
 from fast_upfirdn._util import profile
 
