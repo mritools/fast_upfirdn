@@ -857,7 +857,7 @@ def upfirdn(
     if crop:
         out_len = int(ceil(x.shape[-1] * up / down))
     else:
-        out_len = _output_len(h_flip.size, x.shape[-1], up, down)
+        out_len = _output_len(len(h), x.shape[-1], up, down)
     out_shape[-1] = out_len
 
     if out is not None and out is x:
