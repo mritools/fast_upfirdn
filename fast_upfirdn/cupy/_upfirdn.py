@@ -42,7 +42,7 @@ _include = r"""
 #include "cupy/complex.cuh"
 #include "cupy/carray.cuh"
 
-typedef {data_type} T;
+typedef {data_type} data_t;
 typedef {index_type} idx_t;
 typedef {filter_type} filter_t;
 typedef {out_type} out_t;
@@ -101,11 +101,10 @@ enum MODE {
 
 
 __device__
-T _extend_left(T *x, idx_t idx, idx_t len_x,
-                        MODE mode, T cval)
+data_t _extend_left(data_t *x, idx_t idx, idx_t len_x, MODE mode, data_t cval)
 {
-    T le = 0.;
-    T lin_slope = 0.;
+    data_t le = 0.;
+    data_t lin_slope = 0.;
 
     switch(mode)
     {
@@ -144,10 +143,10 @@ T _extend_left(T *x, idx_t idx, idx_t len_x,
         idx = (-idx - 1) % len_x;
         return x[len_x - idx - 1];
     case MODE_SMOOTH:
-        return x[0] + (T)idx * (x[1] - x[0]);
+        return x[0] + (data_t)idx * (x[1] - x[0]);
     case MODE_LINE:
-        lin_slope = (x[len_x - 1] - x[0]) / (T)(len_x - 1);
-        return x[0] + (T)idx * lin_slope;
+        lin_slope = (x[len_x - 1] - x[0]) / (data_t)(len_x - 1);
+        return x[0] + (data_t)idx * lin_slope;
     case MODE_ANTISYMMETRIC:
         if ((-idx) < len_x)
         {
@@ -173,7 +172,7 @@ T _extend_left(T *x, idx_t idx, idx_t len_x,
         else
         {
             le = x[0] + (x[0] - x[len_x - 1]) *
-                 ((T)((-(idx) - 1) / (len_x - 1)));
+                 ((data_t)((-(idx) - 1) / (len_x - 1)));
             idx = (-idx - 1) % (2 * (len_x - 1));
             if (idx < (len_x - 1))
             {
@@ -196,12 +195,11 @@ T _extend_left(T *x, idx_t idx, idx_t len_x,
 
 
 __device__
-T _extend_right(T *x, idx_t idx, idx_t len_x,
-                           MODE mode, T cval)
+data_t _extend_right(data_t *x, idx_t idx, idx_t len_x, MODE mode, data_t cval)
 {
     // note: idx will be >= len_x
-    T re = 0.;
-    T lin_slope = 0.;
+    data_t re = 0.;
+    data_t lin_slope = 0.;
     switch(mode)
     {
 
@@ -249,11 +247,11 @@ T _extend_right(T *x, idx_t idx, idx_t len_x,
         }
         case MODE_SMOOTH:
             return x[len_x - 1] +
-                   (T)(idx - len_x + 1) *
+                   (data_t)(idx - len_x + 1) *
                    (x[len_x - 1] - x[len_x - 2]);
         case MODE_LINE:
-            lin_slope = (x[len_x - 1] - x[0]) / (T)(len_x - 1);
-            return x[len_x - 1] + (T)(idx - len_x + 1) * lin_slope;
+            lin_slope = (x[len_x - 1] - x[0]) / (data_t)(len_x - 1);
+            return x[len_x - 1] + (data_t)(idx - len_x + 1) * lin_slope;
         case MODE_CONSTANT_EDGE:
             return x[len_x - 1];
         case MODE_ANTISYMMETRIC:
@@ -283,7 +281,7 @@ T _extend_right(T *x, idx_t idx, idx_t len_x,
             {
                 re = x[len_x - 1] +
                      (x[len_x - 1] - x[0]) *
-                     ((T)(idx / (len_x - 1) - 1));
+                     ((data_t)(idx / (len_x - 1) - 1));
                 idx = idx % (2 * (len_x - 1));
                 if (idx < (len_x - 1))
                 {
@@ -310,14 +308,14 @@ _convolved_batch = r"""
 extern "C" {
 
 __global__
-void _apply_batch(T *x, idx_t len_x,
+void _apply_batch(data_t *x, idx_t len_x,
                   filter_t *h_trans_flip_s,
                   idx_t len_h,
                   out_t *out,
                   idx_t out_axis_size,
                   idx_t nbatch,
                   int _mode,
-                  T cval,
+                  data_t cval,
                   int offset,
                   int crop)
 {
@@ -413,7 +411,7 @@ _upfirdn_h = r"""
 extern "C" {
 
 __global__
-void _apply_batch(T *x, idx_t len_x,
+void _apply_batch(data_t *x, idx_t len_x,
                   filter_t *h_trans_flip_s,
                   idx_t len_h,
                   out_t *out,
@@ -422,7 +420,7 @@ void _apply_batch(T *x, idx_t len_x,
                   idx_t out_axis_size,
                   idx_t nbatch,
                   int _mode,
-                  T cval,
+                  data_t cval,
                   int offset,
                   int crop)
 {
@@ -556,7 +554,13 @@ def _nearest_supported_float_dtype(dtype, dtype2=None):
 
 @memoize(for_each_device=True)
 def _get_upfirdn_kernel_inner(
-    up, down, c_data_type, c_filter_type, c_out_type, h_size, c_index_type,
+    up,
+    down,
+    c_data_type,
+    c_filter_type,
+    c_out_type,
+    h_size,
+    c_index_type,
 ):
     func_name = "_apply_batch"
     code = _include.format(
